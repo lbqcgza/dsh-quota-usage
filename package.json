@@ -1,6 +1,6 @@
 {
   "name": "dsh-quota-usage",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "在 DSH 侧边栏底部、用户名正上方显示 DeepSeek 账号剩余额度（总余额 + 赠金余额）的 Web 插件。",
   "keywords": [
