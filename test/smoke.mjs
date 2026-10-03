@@ -29,13 +29,6 @@ function textsOf(node) {
 	return (node.children ?? []).map(textOf).filter(Boolean);
 }
 
-/**
- * Freeze the clock before the bundle is materialized so the refresh indicator's
- * countdown is exactly one full cycle at render time. `new Date()` is untouched.
- */
-const FIXED_NOW = 1_700_000_000_000;
-Date.now = () => FIXED_NOW;
-
 const React = {
 	createElement: (type, props, ...children) => ({
 		type,
@@ -43,6 +36,8 @@ const React = {
 		children: children.flat().filter((child) => child !== null && child !== undefined && child !== false)
 	}),
 	useSyncExternalStore: (subscribe, getSnapshot) => getSnapshot(),
+	// Present so a hook-using render still works here, even though the widget
+	// currently reads the store without any local state of its own.
 	useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
 	useEffect: () => {}
 };
@@ -194,45 +189,76 @@ assert.deepEqual(
 	['额度', '¥13.34', '（赠¥1.00）'],
 	'the ready row leads with the total credit and parenthesizes the bonus'
 );
-assert.match(ready.props.title, /^总余额 ¥13\.34 · 充值余额 ¥12\.34 · 赠金余额 ¥1\.00 · 更新于 .+ · 60 秒后自动刷新 · 点击立即刷新$/);
+assert.match(ready.props.title, /^总余额 ¥13\.34 · 充值余额 ¥12\.34 · 赠金余额 ¥1\.00 · 更新于 .+ · 每 60 秒自动刷新 · 点击立即刷新$/);
 
-/* ------------------------------------------------- the refresh indicator (wide) */
+/* ------------------------------------------- the spinner is absent until asked */
 
-const ring = ready.children[0];
-assert.equal(ring.type, 'svg', 'the wide row leads with the refresh indicator');
-assert.equal(ring.props.width, 14);
-assert.equal(ring.props['aria-hidden'], 'true');
-assert.equal(ring.children.length, 2, 'the indicator draws a track and an arc');
+const idleSlot = ready.children[ready.children.length - 1];
+assert.equal(idleSlot.type, 'span', 'the balance is trailed by the spinner slot');
+assert.equal(idleSlot.props.className, 'dshQuota_ringSlot');
+assert.deepEqual(idleSlot.children, [], 'the slot reserves its width but draws nothing on its own');
+assert.ok(
+	ready.children.every((child) => child.type !== 'svg'),
+	'no ring is drawn before the user asks for a refresh'
+);
 
-const [track, arc] = ring.children;
-const circumference = 2 * Math.PI * (14 - 2) / 2;
-assert.equal(track.type, 'circle');
-assert.equal(track.props.className, 'dshQuota_ringTrack');
-assert.equal(arc.type, 'circle');
-assert.equal(arc.props.className, 'dshQuota_ringArc');
-assert.equal(arc.props.strokeDasharray, circumference);
-assert.equal(arc.props.strokeDashoffset, 0, 'a fresh cycle leaves the arc fully drawn');
-assert.doesNotMatch(ring.props.className, /ringSpin/, 'an idle indicator does not spin');
+/* ------------------------------------------------ background polling shows none */
 
-/* ------------------------------------------------------- the indicator mid-flight */
+const polled = meta.inject().quotaStore.refresh();
+assert.equal(render(true).props['data-refreshing'], 'false', 'an automatic poll does not raise the indicator');
+await polled;
+assert.equal(render(true).props['data-refreshing'], 'false', 'and it stays down once the poll settles');
 
-const inFlight = meta.inject().quotaStore.refresh();
+/* ---------------------------------------- a click shows the spinner while it runs */
+
+const clicked = meta.inject().quotaStore.refreshNow();
 const during = render(true);
-assert.equal(during.props['data-refreshing'], 'true', 'the row reports the in-flight refresh');
+assert.equal(during.props['data-refreshing'], 'true', 'the row reports the user-initiated refresh');
 assert.match(during.props.title, /正在刷新… · 点击立即刷新$/, 'the tooltip names the in-flight refresh');
-assert.match(during.children[0].props.className, /dshQuota_ringSpin/, 'the arc spins while a read is in flight');
-assert.equal(during.children[0].children[1].props.strokeDashoffset, circumference * 0.75, 'the spinning arc holds a quarter turn');
-await inFlight;
 
-/* ------------------------------------------------------ the refresh indicator (rail) */
+const spinnerSlot = during.children[during.children.length - 1];
+assert.equal(spinnerSlot.props.className, 'dshQuota_ringSlot', 'the spinner keeps the trailing slot');
+const spinner = spinnerSlot.children[0];
+assert.equal(spinner.type, 'svg', 'the spinner is drawn inside the trailing slot');
+assert.match(spinner.props.className, /dshQuota_ringSpin/, 'the ring spins');
+assert.equal(spinner.props.width, 14);
+assert.equal(spinner.props['aria-hidden'], 'true');
+assert.equal(spinner.children.length, 2, 'the spinner has a track and an arc');
+const spinnerCircumference = 2 * Math.PI * (14 - 2) / 2;
+assert.equal(spinner.children[1].props.strokeDasharray, spinnerCircumference);
+assert.equal(spinner.children[1].props.strokeDashoffset, spinnerCircumference * 0.75, 'a quarter of the ring is drawn');
+
+await clicked;
+const settled = render(true);
+assert.equal(settled.props['data-refreshing'], 'false', 'the spinner clears as soon as the read settles');
+assert.ok(settled.children.every((child) => child.type !== 'svg' || child.props.width !== 14), 'no wide spinner remains');
+
+/* -------------------------------------------- the click handler uses that path */
+
+ready.props.onClick();
+assert.equal(render(true).props['data-refreshing'], 'true', 'clicking the row starts a user-initiated refresh');
+const joined = meta.inject().quotaStore.refresh();
+assert.equal(render(true).props['data-refreshing'], 'true', 'an auto call joins the running read without clearing the indicator');
+await joined;
+assert.equal(render(true).props['data-refreshing'], 'false', 'the joined read clears the indicator when it settles');
+
+/* ------------------------------------------------------ the rail spinner (rail) */
 
 const rail = render(false);
 assert.deepEqual(textsOf(rail), ['13.34'], 'the rail row drops the symbol and the label');
-const railRing = rail.children[0];
-assert.equal(railRing.type, 'svg');
-assert.equal(railRing.props.width, 36, 'the rail indicator wraps the whole circular button');
-assert.equal(railRing.props.className, 'dshQuota_ringOverlay dshQuota_ring', 'the rail indicator is the overlay layer');
-assert.equal(rail.children[1].props.className, 'dshQuota_railValue', 'the digits sit above the ring');
+assert.equal(rail.props['data-refreshing'], 'false');
+assert.equal(rail.children.length, 1, 'the idle rail row is only its digits');
+assert.equal(rail.children[0].props.className, 'dshQuota_railValue');
+
+const railClicked = meta.inject().quotaStore.refreshNow();
+const railDuring = render(false);
+assert.equal(railDuring.props['data-refreshing'], 'true');
+assert.equal(railDuring.children[0].type, 'svg', 'the rail spinner wraps the button');
+assert.equal(railDuring.children[0].props.width, 34);
+assert.equal(railDuring.children[0].props.className, 'dshQuota_ringOverlay dshQuota_ring dshQuota_ringSpin');
+assert.equal(railDuring.children[1].props.className, 'dshQuota_railValue', 'the digits sit above the ring');
+await railClicked;
+assert.equal(render(false).children.length, 1, 'the rail spinner clears with the read');
 
 balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0.004' }], bonusWallets: [] } };
 await meta.inject().quotaStore.refresh();
@@ -251,7 +277,6 @@ assert.ok(bonusCell, 'the bonus keeps its own accent cell');
 balanceResult = { ok: true, value: null };
 await meta.inject().quotaStore.refresh();
 assert.deepEqual(textsOf(render(true)), ['额度', '未登录'], 'a signed-out account names its state instead of vanishing');
-assert.equal(render(true).children[0].props.className, 'dshQuota_ring', 'a non-ready row shows the bare indicator track');
 
 balanceResult = { ok: false, value: undefined };
 await meta.inject().quotaStore.refresh();
