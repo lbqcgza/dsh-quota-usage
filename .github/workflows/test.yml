@@ -1,0 +1,55 @@
+name: test
+
+# The smoke test drives the real lib/client.js against stubs, so it needs no
+# dependencies and no build step — the job is a checkout and a node run.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22', '24']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Syntax check both halves
+        run: |
+          node --check lib/client.js
+          node --check lib/index.js
+
+      - name: Manifest is valid and declares both halves
+        run: |
+          node -e "
+          const m = require('./package.json');
+          const assert = require('node:assert/strict');
+          assert.equal(m.type, 'module');
+          assert.equal(m.main, 'lib/index.js');
+          assert.equal(m.exports['./client'], './lib/client.js');
+          assert.equal(m.dsh.bundle.patch, './cordis.patch.yml');
+          assert.equal(m.dsh.client.platform, 'web');
+          assert.ok(Array.isArray(m.dsh.client.inject));
+          assert.ok(m.scripts === undefined || m.scripts.prepare === undefined, 'no install-time build step');
+          console.log('manifest ok');
+          "
+
+      - name: Smoke test
+        run: node test/smoke.mjs

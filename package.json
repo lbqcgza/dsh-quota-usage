@@ -2,24 +2,42 @@
   "name": "dsh-quota-usage",
   "version": "0.1.0",
   "private": true,
-  "description": "在 DSH 侧边栏底部、用户名正上方显示 DeepSeek 账号剩余额度（充值余额 + 赠送余额）的全局小组件。",
+  "description": "在 DSH 侧边栏底部、用户名正上方显示 DeepSeek 账号剩余额度（总余额 + 赠金余额）的 Web 插件。",
   "keywords": [
     "dsh",
     "dsh-plugin",
+    "dsh-client-plugin",
     "deepseek-harness",
     "quota",
     "balance",
     "usage",
+    "credit",
     "额度",
     "余额"
   ],
   "license": "MIT",
+  "author": "lbqcgza",
+  "homepage": "https://github.com/lbqcgza/dsh-quota-usage#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lbqcgza/dsh-quota-usage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lbqcgza/dsh-quota-usage/issues"
+  },
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
     "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node test/smoke.mjs",
+    "check": "node --check lib/client.js && node --check lib/index.js && node test/smoke.mjs"
   },
   "dsh": {
     "bundle": {
@@ -37,7 +55,11 @@
   },
   "files": [
     "lib",
+    "test",
+    "assets",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "README.en.md",
+    "SECURITY.md"
   ]
 }

@@ -1,0 +1,12 @@
+# Source files check out with LF everywhere. Without this, a Windows checkout
+# under autocrlf gets CRLF sources and every later diff or patch carries the
+# conversion noise instead of the change.
+* text=auto eol=lf
+# Binary-ish assets keep their bytes.
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.ico -text
+*.woff -text
+*.woff2 -text

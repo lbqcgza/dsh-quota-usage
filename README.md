@@ -1,73 +1,57 @@
+<p align="center">
+  <img src="assets/logo.svg" width="96" alt="dsh-quota-usage logo">
+</p>
+
 # dsh-quota-usage
 
-在 DSH Web 界面**侧边栏底部、用户名正上方**显示 DeepSeek 账号**剩余额度**（充值余额 + 赠送余额）的小组件。
+中文 | [English](README.en.md)
 
-- **位置**：占 `sidebar.footer.action` 槽位。侧边栏底部的渲染顺序是
-  `sidebar.footer.action`（上）→ `sidebar.settings`（下，账号 launcher 显示头像与用户名），
-  所以本组件就贴在用户名上面。
-- **全局**：该槽位是 root 作用域，跟随侧边栏常驻，**任何面板/页面**都可见。
-- **数据源**：官方账号 Remote 命名空间 `remote.account` 的 `getBalance`，与「设置 → 账号」页同源；
-  不落盘、不接触 token、不做本地估算。
-- **纯 UI 插件**：host 半侧是空的 `apply`，只为让包在 Loader 里占一行；全部逻辑在浏览器半侧。
+[![stars](https://img.shields.io/github/stars/lbqcgza/dsh-quota-usage?style=flat)](https://github.com/lbqcgza/dsh-quota-usage)
+[![license](https://img.shields.io/github/license/lbqcgza/dsh-quota-usage)](LICENSE)
+![DSH web client](https://img.shields.io/badge/DSH-web%20client-5773ff)
+![no telemetry](https://img.shields.io/badge/telemetry-none-success)
+
+装在 DeepSeek Harness 侧边栏底部的小组件：在你的**用户名正上方**显示账号**剩余额度**，点一下即刷新。
+
+![dsh-quota-usage](assets/preview-zh.svg)
+
+平时金额贴住最右边；点整行立即刷新，转圈只在这时出现。
+
+## 安装
+
+在 DSH 里用 `plugin_manager` 装（Creator 模式，或设置里的插件页）：
+
+```sh
+plugin_manager install_bundle  target = github:lbqcgza/dsh-quota-usage
+```
+
+也可以直接指向本仓库的本地克隆路径：
+
+```sh
+plugin_manager install_bundle  target = <本仓库绝对路径>
+```
+
+**装完要重启一次桌面 App。** 客户端模块的启动图只在宿主进程启动时生成一次，之后刷新页面也拿不到新插件 ——
+这一点和多数 DSH 插件不同，原因见[实现要点](#实现要点)。`dsh web` 浏览器模式则刷新页面即可。
+
+装好后：侧边栏底部、`设置` 与头像/用户名那一行的**上面**会多出一行 `额度`。
+
+**需要 DSH 0.2.0-rc.2 或更新的 Web 版**（桌面版或 `dsh web`）。它依赖 `sidebar.footer.action` 槽位与官方
+`remote.account` 命名空间；headless / SDK / ACP 这类没有 Web 客户端的 profile 不适用。
+
+## 你会得到
+
+- **总余额一眼看到** —— 主数值是 Platform 的充值余额（`normal_wallets`）与赠金余额（`bonus_wallets`）在该币种下的**合计**；括号里是赠金部分，为 0 时整个括号不显示
+- **点一下就刷新** —— 点整行立刻重读一次，读取期间余额右侧出现圆形转圈，读完即消失；后台轮询、切回窗口、账号状态变化都不会闪出转圈
+- **让位是缓动的** —— 金额平时贴住右边缘（不为转圈留空位），转圈出现时用 `transform` 平移让位 22px，曲线 `cubic-bezier(.22,.61,.36,1)`；只动 `transform`/`opacity`，不触发布局、不 reflow
+- **不会静默消失** —— 读取中 / 读取失败 / 未连接 / 未登录都有明确文案。一个悄悄不出现的组件和一个坏掉的插件无法区分，所以它从不"什么都不显示"
+- **不会拖垮启动** —— 每个挂载步骤都被隔离，出错只把排查痕迹留在可读回的位置。这不只是洁癖：桌面版一旦整页启动失败，启动器的恢复流程会重写你的 profile
+- **零遥测** —— 不落盘、不上报、不接触 token；余额只从官方账号接口读，随请求的元数据与官方账号页逐字一致
+- **跟随界面语言** —— 中英双语，随 DSH 的界面语言切换
 
 ## 显示效果
 
-展开状态（平时金额贴在最右）：
-
-```
-  额度                        ¥13.34（赠¥1.00）   ← 本组件（用户名上方）
-  ⚙ 设置
-  (头像) 张三                                     ← 账号 launcher / 用户名
-```
-
-点击触发一次手动刷新时，金额向左让位，转圈出现在它的右侧：
-
-```
-  额度               ¥13.34（赠¥1.00） ◌
-```
-
-- **主数值 = 总余额**，即 Platform 的 `normal_wallets`（官方账号页标为「充值余额」）
-  与 `bonus_wallets`（官方标为「赠金余额」）在该币种下的**合计**。
-- **括号内 = 赠送余额**；为 0 时整个括号不显示。
-- **最右侧的圆环 = 手动刷新转圈**（见下），平时不可见也不占位。
-- 悬停提示给出拆分与刷新节奏：
-  `总余额 ¥13.34 · 充值余额 ¥12.34 · 赠金余额 ¥1.00 · 更新于 14:32 · 每 60 秒自动刷新 · 点击立即刷新`。
-- **点击整行 = 立即刷新一次。**
-- 收起为 56px 轨道时（macOS/Web）转圈变成包住整个圆形按钮的外圈，数字居中叠在上面；
-  Windows 原生标题栏下侧边栏收起时整个底部区域由 shell 隐藏，与用户名行一同隐藏。
-
-### 手动刷新的转圈指示
-
-余额右侧那个 14px 圆环是**手动刷新**的反馈，只在一种条件下出现：
-
-| 条件 | 表现 |
-| --- | --- |
-| **只有点击整行触发**的读取 | 圆环淡入并微微放大，四分之一弧旋转，行上带 `data-refreshing="true"` |
-| 读取一结束（成功/失败都算） | 立即淡出，结果直接反映在数字或文案上 |
-| 后台轮询、挂载首次读取、窗口焦点/可见性、账号状态流 | **不显示** —— 只有用户主动触发才有 |
-
-### 席位与缓动
-
-- **平时不留空位**：金额由自己的 `margin-left:auto` 贴在行的右边缘，所以空闲时**不会**为转圈预留宽度。
-- **让位量精确**：环出现时金额组平移 `-(spinner + gap)`（`--dsh-quota-spinner` + `--dsh-quota-gap`，
-  即 14px + 8px = 22px），用 CSS 变量算，不写死魔法数。
-- **只动 transform/opacity**：让位是 `transform: translateX(...)`，转圈是 `opacity` + `scale`，
-  都不触发布局（不 reflow），位移因此跑在合成层上，不会掉帧。
-- **非线性缓动**：曲线是 `cubic-bezier(0.22, 0.61, 0.36, 1)`（先快后缓，非 `linear`），
-  位移 260ms、淡入 160ms，出现和消失都走同一条曲线。
-- 转圈元素**常驻 DOM**（这是 CSS transition 能播放的前提），靠行上的 `data-refreshing`
-  属性切换可见性；空闲时 `opacity:0`、`transform:scale(.6)` 且**不运行旋转动画**，没有额外开销。
-- 轨道收起时改为包住 36px 圆形按钮的外圈（`inset:1px`，避免描边被按钮圆角裁掉），同样走淡入 + 缩放。
-- `prefers-reduced-motion: reduce` 时旋转与过渡都关闭（仍保留静态圆环作为"正在刷新"的提示）。
-
-> 注意：转圈时长等于这一次 Remote 请求的真实耗时，所以网络快时它可能一闪而过。
-> 这是"完成即消失"的直接结果 —— 如果你希望它至少停留一下（比如最少 400ms）以免看不清，
-> 说一声即可加上。
-
-### 每个阶段都会显示
-
-**组件不会因为拿不到数据而静默消失** —— 一个悄悄不出现的组件和一个坏掉的插件无法区分。
-所以每种状态都有明确文案：
+展开侧边栏时占一行，位置在 `sidebar.settings`（设置 + 账号 launcher）**上方**。
 
 | 阶段 | 显示 | 含义 |
 | --- | --- | --- |
@@ -75,38 +59,92 @@
 | `ready` | `¥13.34（赠¥1.00）` | 正常 |
 | `failed` | 读取失败 | Remote 调用失败（保留上一次有效数字） |
 | `unavailable` | 未连接 | 页面还没有 `remote.account` 服务，正在快速重试 |
-| `signed-out` | 未登录 | Host 侧没有可用凭证，`getBalance` 返回 `null` |
+| `signed-out` | 未登录 | 宿主侧没有可用凭证 |
 
-## 三个必须知道的技术点
+悬停提示给出拆分与刷新节奏：
 
-这三点都是实际调试得出的，不是推测：
+```text
+总余额 ¥13.34 · 充值余额 ¥12.34 · 赠金余额 ¥1.00 · 更新于 14:32 · 每 60 秒自动刷新 · 点击立即刷新
+```
 
-### 1. 账号命名空间要用 `ctx.get("remote.account")` 取
+收起成 56px 轨道时（macOS / 普通 Web）变成 36px 圆形按钮，数字居中、转圈变成包住它的外圈；
+Windows 原生标题栏下侧边栏收起时整个底部区域由 shell 隐藏，与用户名行一同隐藏。
 
-API gateway 把每个 Remote 命名空间注册成**独立的 Cordis 服务**，key 是
-`` `remote.${namespace}` ``（`RemoteNamespaceService extends Service`，见
-`@deepseek-ai/dsh-api-gateway/client`）。所以规范查找是 `ctx.get("remote.account")`；
-`ctx.remote.account` 只是嵌套访问器，在没有注入该 dotted key 的上下文里可能拿不到值。
-本插件按 `ctx.get("remote.account")` → `ctx.remote.account` → `ctx["remote.account"]` 依次回退。
+## 刷新节奏
 
-`inject` 里**故意不声明** `"remote.account"`：声明一个在某些部署下不存在的服务会让 fiber
-一直 pending，而 shell 的启动审计把 pending 也算作失败（见下）。
+- 挂载时读一次；**未拿到首个结果前每 5 秒重试**（账号命名空间是宿主异步挂载的独立服务，可能比本插件晚就绪），拿到后转为每 60 秒
+- 页面重新可见、窗口获得焦点、连接重置时重读
+- 订阅 `account.watch` 账号状态流，登录 / 登出后立刻重读
+- **点击整行**立刻重读一次，并在读取期间显示转圈
+- 并发去重：同时触发多个刷新只会发一次 Remote 调用；后台调用与你的点击重叠时共用一个请求，转圈仍会显示到该请求结束
+
+## 隐私与安全
+
+- **不持有凭据** —— 没有 token、没有账号、没有 API key。账号 token 由宿主持有并用于发请求，客户端从来拿不到它
+- **不注册任何 HTTP 路由** —— host 半侧是空的 `apply`，只为让包在 Loader 里占一行
+- **不执行命令、不读文件**
+- **只发一次调用** —— `remote.account.getBalance`，与官方「设置 → 账号」页同源；随请求的元数据**只有** `version`（DSH 版本号）、`locale`（界面语言）、`timezoneOffsetSeconds`（UTC 偏移）三项，与官方账号页逐字一致，没有设备 ID / 用户 ID
+- **不写浏览器状态** —— `localStorage`、`sessionStorage`、cookie、`indexedDB` 全无使用
+- **没有任何遥测出口** —— 代码里没有 `fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon`
+
+需要报告安全问题请用 [私密漏洞报告](https://github.com/lbqcgza/dsh-quota-usage/security/advisories/new)，
+不要开公开 issue；判断边界见 [SECURITY.md](SECURITY.md)。
+
+## 已知限制
+
+- 只读展示，不提供充值或跳转。Platform 原生页面由官方 `ui-settings-account` 的 `shell.overlay` 共享宿主条目独占，第三方插件不应另起一个
+- 赠送余额与充值余额取同一币种；多币种并存时优先 CNY，否则取第一个钱包的币种
+- 金额按 Platform Web 口径显示：两位小数、千分位、正的亚分显示为 `<0.01`。这只是**展示格式化**，原始余额字符串不被改写
+- 转圈时长 = 这次请求的真实耗时，网络快时可能一闪而过
+- `CLIENT_VERSION` 目前硬编码为 `0.2.0-rc.2`（只作账号接口的客户端标识，不影响功能）
+
+## 开发与验证
+
+```sh
+npm test          # 等价于 node test/smoke.mjs
+npm run check     # 语法检查 + 上面那步
+```
+
+`test/smoke.mjs` 用桩件跑**真实的 `lib/client.js`**（模拟模块加载器、React、DOM 与 Cordis 上下文），
+无需依赖、无需构建。CI 在 Node 20 / 22 / 24 上跑同一套。
+
+覆盖的内容：槽位与 props、每请求元数据、就绪/轨道/亚分/未登录/失败/USD 各状态渲染、
+转圈的行为（平时只留空占位不画环、**后台轮询不显示**、点击后才出现四分之一弧并旋转、
+读取 settle 后立即消失、`onClick` 确实走手动路径）、缓动契约（`--dsh-quota-ease` 必须是非线性
+`cubic-bezier`，且显式禁止任何 `transition` 落到 `linear`）、自诊断（未就绪阶段镜像、挂载失败留痕、
+重复挂载容忍）。
+
+改完 `lib/client.js` 后，在插件页或 `plugin_manager` 里**停用再启用**该插件即可让页面重新加载，无需重启 App。
+
+## 实现要点
+
+这一节写给 DSH 插件作者 —— 三个都是踩出来的，不是推测。
+
+### 1. 账号命名空间要用 `ctx.get("remote.account")`
+
+API gateway 把每个 Remote 命名空间注册成**独立的 Cordis 服务**，key 是 `` `remote.${namespace}` ``
+（`RemoteNamespaceService extends Service`）。所以规范查找是 `ctx.get("remote.account")`；
+`ctx.remote.account` 只是嵌套访问器，在没有注入该 dotted key 的上下文里可能拿不到值 ——
+那正是"组件注册成功、但余额永远空白"的原因。
+
+本插件按 `ctx.get("remote.account")` → `ctx.remote.account` → `ctx["remote.account"]` 依次回退，
+并且**故意不在 `inject` 里声明** `"remote.account"`：声明一个在某些部署下不存在的服务会让 fiber
+一直 pending，而 shell 的启动审计把 pending 也算作失败。
 
 ### 2. `apply` 抛异常 = 整个页面启动失败
 
-shell 的启动审计（`web boot: N entry did not activate`）在任一条目 fiber 不是 `active`
-时**中止整个启动**。桌面版随后报告 web-boot 崩溃
-（`%APPDATA%\@deepseek-ai\dsh-desktop\logs\crash-*-web-boot.log`），
-而启动器的恢复流程会**重写 profile**（丢掉 `dsh.profile.bundles` 里的额外条目和
-`cordis.patch.yml` 里的覆盖项）。
+shell 的启动审计（`web boot: N entry did not activate`）在任一条目 fiber 不是 `active` 时**中止整个启动**。
+桌面版随后报告 web-boot 崩溃（`%APPDATA%\@deepseek-ai\dsh-desktop\logs\crash-*-web-boot.log`），
+而启动器的恢复流程会**重写 profile**，丢掉 `dsh.profile.bundles` 里的额外条目和
+`cordis.patch.yml` 里的覆盖项。
 
 所以本插件的 `apply` **永不向外抛异常**：每个挂载步骤都被隔离，失败时记一笔 trace 并让插件保持惰性，
 绝不让一个小组件拖垮整个 App。
 
 ### 3. 新装的客户端插件必须重启桌面 App
 
-桌面壳（`lib/main.js`）把 SPA 的 `index.html` 静态送出，启动图（boot injections，即
-`window.__DSH_BOOT__` 里的客户端模块表）只在 **host 启动时取一次**：
+桌面壳把 SPA 的 `index.html` 静态送出，启动图（`window.__DSH_BOOT__` 里的客户端模块表）**只在 host
+启动时取一次**：
 
 ```js
 const ready = await host.start();
@@ -114,88 +152,25 @@ injections = ready.injections;          // 只在 App 启动时算一次
 ipcMain.handle(DESKTOP_IPC.boot, () => ({ injections, streamBaseUrl }));
 ```
 
-所以**新加一行**客户端模块后，刷新页面也拿不到它的 bundle（Loader 条目已是 active，但页面手里
-的模块表是旧的）。`dsh web` 的浏览器模式则刷新页面就会重新渲染启动图。
-
-**但一旦这一行已存在**，通过插件页 / `plugin_manager` 停用再启用会触发页面重新同步并重新加载该模块，
-不需要重启。
+所以**新加一行**客户端模块后，刷新页面也拿不到它的 bundle（Loader 条目已是 active，但页面手里的模块表
+是旧的）。`dsh web` 浏览器模式则刷新页面就会重新渲染启动图。**但一旦这一行已存在**，停用再启用会触发
+页面重新同步并重新加载，不需要重启。
 
 ## 自诊断
 
-出问题时不需要猜：
+- **挂载失败** —— trace 以 `shell.overlay` 的 occupant id 形式留在页面里，
+  形如 `dsh-quota-usage-diag:bind=ok | dict=ok | … | seat=!<错误>`，客户端 Slot 检查即可读到；
+  同时有一行 `console.error`。
+- **读数未就绪** —— 只要阶段不是 `ready`，插件会把自己镜像成 `shell.overlay` 的
+  `dsh-quota-usage-state:<phase>` 条目，拿到金额后自动撤下。所以"overlay 里没有 state 条目"
+  等于"这条路没有跑起来"，"有 state 条目"等于"跑起来了但卡在该阶段"。
 
-- **挂载失败**：trace 会以 `shell.overlay` 的 occupant id 形式留在页面里，读法：
+## 友情链接
 
-  ```js
-  // 客户端 Slot 检查
-  listSubTree({ root: "shell.overlay" })
-  // → { id: "dsh-quota-usage-diag:bind=ok | dict=ok | store=ok | start=ok | mirror=ok | seat=!<错误>" }
-  ```
+- [dsh-market](https://github.com/dsh-market/dsh-market) —— DSH 里的可视化插件市场。本仓库的 README
+  结构、`.gitattributes` 与 `SECURITY.md` 的组织方式参考了它
+- [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) —— DSH 插件精选列表
 
-  同时有一行 `console.error("dsh-quota-usage: mount failed — …")`。
+## 许可
 
-- **读数未就绪**：只要阶段不是 `ready`，它会把自己镜像成
-  `shell.overlay` 的 `dsh-quota-usage-state:<phase>` 条目；拿到金额后自动撤下。
-  所以「overlay 里没有 state 条目」= 那一路没有跑起来；「有 state 条目」= 跑起来了但卡在该阶段。
-
-## 安装
-
-```powershell
-# 在 DSH 里（Creator 模式）用 plugin_manager 工具：
-#   install_bundle  target = <本目录绝对路径>
-```
-
-本目录自带 `cordis.patch.yml`，安装后作为 bundle 被选中并插入一行 Loader 条目：
-
-```yaml
-- insert:
-    - id: dsh-quota-usage
-      name: dsh-quota-usage
-```
-
-装好后**重启一次 DeepSeek Harness**（原因是上面第 3 点）。重启后小组件出现在侧边栏底部、
-用户名正上方。
-
-## 刷新策略
-
-- 挂载时读一次；**未拿到首个结果前每 5 秒重试**（账号命名空间可能比本插件晚挂载），
-  拿到后转为每 60 秒；
-- 页面重新可见、窗口获得焦点、连接重置时重读；
-- 订阅 `account.watch` 账号状态流，登录/登出后立刻重读；
-- **点击整行**（`quotaStore.refreshNow()`）立刻重读一次，并在读取期间显示转圈；
-- 并发去重：同时触发多个刷新只会发一次 Remote 调用；后台调用与用户点击重叠时**共用一个请求**，
-  转圈仍会显示到该请求结束。
-
-## 目录
-
-| 文件 | 作用 |
-| --- | --- |
-| `package.json` | 包名、`dsh.bundle.patch`、`dsh.client`（`platform: web`、依赖排序 `inject`） |
-| `cordis.patch.yml` | bundle 层：插入 Loader 条目 |
-| `lib/index.js` | host 半侧：空 `apply`，仅占位 |
-| `lib/client.js` | 浏览器半侧：样式、字典、额度 store、`QuotaRow` 组件与手动刷新转圈、槽位注册、自诊断 |
-| `test/smoke.mjs` | 离线冒烟测试：桩件模拟客户端运行时 |
-
-## 开发与验证
-
-```powershell
-node --check lib/client.js     # 语法
-node test/smoke.mjs            # 行为冒烟测试
-```
-
-`test/smoke.mjs` 用桩件跑真实的 `lib/client.js`，断言：槽位与 props、就绪/轨道/亚分/
-未登录/失败/USD 各状态渲染、每请求元数据、未就绪阶段镜像、挂载失败留痕、重复挂载容忍，
-以及手动刷新转圈的行为（平时只留空占位槽不画环、**后台轮询不显示**、点击后才出现四分之一弧
-并旋转、读取 settle 后立即消失、点击回调确实走手动路径、轨道版外圈同理）。
-
-改完 `lib/client.js` 后，在插件页或 `plugin_manager` 里停用再启用该插件即可让页面重新加载
-（无需重启 App）。
-
-## 已知限制
-
-- 只读展示，不提供充值/跳转（Platform 原生页面由 `ui-settings-account` 的 `shell.overlay`
-  共享宿主条目独占，第三方插件不应另起一个）。
-- 赠送余额与充值余额取同一币种；多币种并存时优先 CNY，否则取第一个钱包的币种。
-- 金额按 Platform Web 口径显示：两位小数、千分位、正的亚分显示为 `<0.01`。
-  这只是**展示格式化**，原始余额字符串不被改写。
-- 桌面版新增模块行仍需重启一次 App 才能进启动图（第 3 点）。
+MIT · [github.com/lbqcgza/dsh-quota-usage](https://github.com/lbqcgza/dsh-quota-usage)
