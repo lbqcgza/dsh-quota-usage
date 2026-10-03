@@ -46,7 +46,7 @@ profiles without a Web client are not supported.
 
 ## What you get
 
-- **The total at a glance** — the headline is the sum of Platform's recharge wallets (`normal_wallets`) and bonus wallets (`bonus_wallets`) in one currency; the parenthesized part is the bonus, and the whole bracket disappears when it is zero
+- **The total at a glance** — the headline is the sum of Platform's recharge wallets (`normal_wallets`) and bonus wallets (`bonus_wallets`) in one currency; the parenthesized part is the bonus, and **below one cent (zero included) the whole bracket goes away with its cell** rather than leaving a gap or a `<0.01` noise value
 - **Click to refresh** — clicking the row re-reads immediately and shows a circular spinner to the right of the amount for exactly as long as the read runs. Background polling, refocusing the window, and account state changes never flash the spinner
 - **The make-room motion is eased** — the amount sits flush to the right edge when idle (no space reserved for the spinner) and slides 22px left while it is up, on `cubic-bezier(.22,.61,.36,1)`. Only `transform`/`opacity` animate, so nothing reflows
 - **It never silently disappears** — loading, failed, not connected, and signed out each say so. A widget that quietly does not appear is indistinguishable from a broken plugin, so this one always renders its state
@@ -110,6 +110,7 @@ rather than a public issue; the boundaries that matter are described in [SECURIT
 - Amounts follow Platform Web formatting: two decimals, digit grouping, and a positive sub-cent
   amount as `<0.01`. This is **display formatting only** — the raw balance string is not rewritten
 - The spinner lasts as long as the request actually takes, so a fast network can make it a blink
+- **A bonus under one cent is not shown** — the threshold is one cent (`MIN_VISIBLE_AMOUNT`): the formatter would only print `<0.01`, which is noise rather than a balance, so the cell is not rendered at all. The total is still computed from the real values; the threshold only affects display
 - `CLIENT_VERSION` is currently hardcoded to `0.2.0-rc.2` (it only labels the requesting client on
   the account API; it does not affect behaviour)
 

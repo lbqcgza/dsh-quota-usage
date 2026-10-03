@@ -331,6 +331,35 @@ assert.deepEqual(
 const bonusCell = render(true).children[1].children.find((child) => child.props?.className === 'dshQuota_bonus');
 assert.ok(bonusCell, 'the bonus keeps its own accent cell inside the amount group');
 
+/* ------------------------------------- the bonus bracket hides below one cent */
+
+balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12.34' }], bonusWallets: [{ currency: 'CNY', balance: '0.004' }] } };
+await meta.inject().quotaStore.refresh();
+assert.deepEqual(
+	textsOf(render(true)),
+	['额度', '¥12.34'],
+	'a drained sub-cent bonus draws no bracket at all'
+);
+assert.equal(
+	render(true).children[1].children.some((child) => child.props?.className === 'dshQuota_bonus'),
+	false,
+	'there is no bonus cell to style or space'
+);
+assert.doesNotMatch(render(true).props.title, /赠金余额/, 'the tooltip drops the empty bonus row too');
+
+balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12.34' }], bonusWallets: [{ currency: 'CNY', balance: '0.01' }] } };
+await meta.inject().quotaStore.refresh();
+assert.deepEqual(
+	textsOf(render(true)),
+	['额度', '¥12.35（赠¥0.01）'],
+	'one cent is the first bonus worth showing'
+);
+assert.match(render(true).props.title, /赠金余额 ¥0\.01/, 'and it appears in the tooltip');
+
+balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12.34' }], bonusWallets: [] } };
+await meta.inject().quotaStore.refresh();
+assert.deepEqual(textsOf(render(true)), ['额度', '¥12.34'], 'no bonus wallet means no bonus bracket');
+
 balanceResult = { ok: true, value: null };
 await meta.inject().quotaStore.refresh();
 assert.deepEqual(textsOf(render(true)), ['额度', '未登录'], 'a signed-out account names its state instead of vanishing');
