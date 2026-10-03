@@ -67,15 +67,19 @@ const React = {
 	}),
 	useSyncExternalStore: (subscribe, getSnapshot) => getSnapshot(),
 	useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
-	// The bridge hands its reading over from an effect, so the stub has to run
-	// effects for the usage sub-title to reach the store at all.
+	// The bridge hands its reading over from an effect and withdraws it from that
+	// effect's cleanup, so the stub has to run effects and keep their cleanups:
+	// draining `effectCleanups` is what an unmount looks like here.
 	useEffect: (callback) => {
-		callback();
+		const cleanup = callback();
+		if (typeof cleanup === 'function') effectCleanups.push(cleanup);
 	}
 };
 
 const styleTags = [];
 const storage = new Map();
+/** Effect cleanups the stub has collected; running them is an unmount. */
+const effectCleanups = [];
 const documentStub = {
 	querySelector: () => null,
 	createElement: () => ({ dataset: {}, textContent: '' }),
@@ -634,6 +638,49 @@ assert.match(emptyRow.props.title, /^额度读取失败/, 'and the tooltip says 
 assert.ok(
 	emptyRegistered.some((entry) => entry.meta.id === 'dsh-quota-usage-state:failed'),
 	'the phase mirror reports the failure too, not a permanent loading state'
+);
+
+/* ------------------------------------------- exact cents, and compact token counts */
+
+// The double nearest 1.15 times 100 is 114.99999999999999, so flooring the product
+// alone drops a cent — which is why each of these is a test rather than a spot check.
+for (const [wallet, shown] of [['1.15', '¥1.15'], ['2.01', '¥2.01'], ['8.29', '¥8.29'], ['-5.10', '-¥5.10']]) {
+	balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: wallet }], bonusWallets: [] } };
+	await meta.inject().quotaStore.refresh();
+	assert.ok(leafTexts(render(true)).includes(shown), `a balance of ${wallet} renders as ${shown}`);
+}
+
+// 250 000 tokens must not compact to "25k": at zero decimals `toFixed` emits no
+// point, so trimming trailing zeros would eat the integer's own zeros.
+balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12.34' }], bonusWallets: [] } };
+await meta.inject().quotaStore.refresh();
+reportUsage('session-fixture', { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 250_000 });
+assert.match(render(true).props.title, /本会话用量 250k tokens/, 'a 250 000-token session reads 250k, not 25k');
+
+// A peak band just under a cent used to print the malformed range "¥<0.01–0.01".
+reportUsage('session-fixture', { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 800 });
+assert.deepEqual(
+	leafTexts(render(true)),
+	['额度', '¥12.34', '本会话', '约¥<0.01'],
+	'a sub-cent range collapses to one figure instead of "<0.01–0.01"'
+);
+
+/* ----------------------------- the report leaves with the session that made it */
+
+reportUsage('session-fixture', usageFixture);
+assert.equal(render(true).children.length, 2, 'the sub-title is back before the unmount');
+for (const cleanup of effectCleanups.splice(0)) cleanup();
+assert.equal(render(true).children.length, 1, 'unmounting the composer dock withdraws the report it made');
+assert.equal(render(true).props.title.includes('本会话用量'), false, 'and the tooltip drops it as well');
+
+/* ------------------------------ the poll cadence retires once the namespace answers */
+
+balanceResult = { ok: true, value: null };
+await meta.inject().quotaStore.refresh();
+assert.equal(
+	timers[timers.length - 1].delay,
+	60_000,
+	'a signed-out answer retires the 5s pre-answer retry instead of polling 12 times a minute'
 );
 
 /* ------------------------------------------- a failed mount stays inert + traceable */
