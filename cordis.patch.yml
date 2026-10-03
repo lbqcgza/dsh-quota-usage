@@ -1,0 +1,11 @@
+# dsh-quota-usage bundle layer.
+#
+# One row carries both halves:
+#   - the host plugin resolves from this package's main export (lib/index.js);
+#     it is an intentionally empty `apply` so the package holds a Loader row.
+#   - the client half rides the same row: dsh's client-modules scanner finds the
+#     `dsh.client` declaration in package.json and serves ./lib/client.js into
+#     the web boot graph.
+- insert:
+    - id: dsh-quota-usage
+      name: dsh-quota-usage
