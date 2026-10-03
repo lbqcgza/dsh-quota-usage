@@ -21,7 +21,8 @@
   <text class="label" x="64" y="86">额度</text>
   <text class="value" x="592" y="86" text-anchor="end">¥13.34</text>
   <text class="bonus" x="672" y="86" text-anchor="end">（赠¥1.00）</text>
-  <text class="sub" x="64" y="104">约 ¥1.20–2.40</text>
+  <text class="sub" x="64" y="104">本会话</text>
+  <text class="sub" x="672" y="104" text-anchor="end">约¥1.20–2.40</text>
 
   <circle class="icon" cx="72" cy="145" r="8"/>
   <text class="muted" x="96" y="150">设置</text>
@@ -34,7 +35,8 @@
   <text class="label" x="64" y="290">额度</text>
   <text class="value" x="570" y="290" text-anchor="end">¥13.34</text>
   <text class="bonus" x="650" y="290" text-anchor="end">（赠¥1.00）</text>
-  <text class="sub" x="64" y="308">约 ¥1.20–2.40</text>
+  <text class="sub" x="64" y="308">本会话</text>
+  <text class="sub" x="672" y="308" text-anchor="end">约¥1.20–2.40</text>
   <circle class="track" cx="665" cy="284" r="7"/>
   <circle class="arc" cx="665" cy="284" r="7" stroke-dasharray="32.99 11.00" transform="rotate(-90 665 284)"/>
 

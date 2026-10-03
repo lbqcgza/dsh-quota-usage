@@ -470,8 +470,24 @@ assert.equal(withUsage.children[0].props.className, 'dshQuota_main', 'the credit
 assert.equal(withUsage.children[1].props.className, 'dshQuota_usage');
 assert.deepEqual(
 	leafTexts(withUsage),
-	['额度', '¥12.34', '约 ¥5.10–10.20'],
-	'the sub-title shows the money alone, as an off-peak to peak range'
+	['额度', '¥12.34', '本会话', '约¥5.10–10.20'],
+	'the sub-title repeats the credit line as a second label/value row'
+);
+// Both rows have to be the same shape, or the two labels will not share a column.
+const usageRow = withUsage.children[1];
+assert.equal(usageRow.props.className, 'dshQuota_usage');
+assert.equal(usageRow.children[0].props.className, 'dshQuota_usageName');
+assert.equal(usageRow.children[1].props.className, 'dshQuota_usageValue');
+assert.equal(withUsage.children[0].children[0].props.className, 'dshQuota_label', 'both rows lead with a label cell');
+assert.match(
+	sheet,
+	/\.dshQuota_usageValue\{[^}]*margin-left:auto/,
+	'the estimate is pinned to the same right edge as the credit above it'
+);
+assert.match(
+	sheet,
+	/\.dshQuota_usage\{[^}]*display:flex/,
+	'the second row is a flex row like the first, so the labels align'
 );
 assert.match(
 	withUsage.props.title,
@@ -494,14 +510,14 @@ stopWatching();
 reportUsage('session-fixture', { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 1_000_000, outputTokens: 0 });
 assert.deepEqual(
 	leafTexts(render(true)),
-	['额度', '¥12.34', '约 ¥1.00–2.00'],
+	['额度', '¥12.34', '本会话', '约¥1.00–2.00'],
 	'a cache write is billed at the miss rate'
 );
 
 reportUsage('session-fixture', { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 100 });
 assert.deepEqual(
 	leafTexts(render(true)),
-	['额度', '¥12.34', '约 ¥<0.01'],
+	['额度', '¥12.34', '本会话', '约¥<0.01'],
 	'a sub-cent estimate collapses to a single <0.01 figure'
 );
 

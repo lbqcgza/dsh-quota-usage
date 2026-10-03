@@ -80,15 +80,18 @@ sidebar hides the whole foot area, so it hides together with the user-name row. 
 usage sub-title — 36px has no room for it.
 ## Usage sub-title
 
-The line under the credit is the **current session's** estimated usage:
+The line under the credit is the **current session's** estimated usage, and it forms one
+label/value list with the row above it:
 
 ```text
-≈¥1.20–2.40
+Credit    ¥13.34 (bonus ¥1.00)
+Session  ≈¥1.20–2.40
 ```
 
-It is **left-aligned with the `Credit` label above it** — a `<button>` carries
-`text-align: center` from the UA stylesheet, which would centre this full-width line, so
-the plugin sets `text-align: left` explicitly.
+Both rows share one layout: `Credit` / `Session` are the left label column (`flex:none`, so the two
+labels share a left edge), and each value is pinned with `margin-left:auto` to the same right edge.
+**A `<button>` carries `text-align: center` from the UA stylesheet, which would centre the text of a
+full-width child**, so the row sets `text-align: left` explicitly (a CSS contract test locks it).
 
 - **The amount is an estimate** — the session log records **tokens only, never money** (DSH ships no price list either), so it is derived from the official price list: `deepseek-flash` at 0.02 (cached input) / 1 (uncached input) / 4 (output) CNY per million tokens off-peak, doubled at peak
 - **The token count lives in the tooltip** — it comes from the `tokenUsage` projection (a replay of the whole persisted log, so paging and compaction do not change it), grouped the way DSH itself groups the prompt side: the three disjoint buckets `uncachedInputTokens` + `cacheReadTokens` + `cacheWriteTokens`, plus `outputTokens`. Hover for the exact count; the sub-title shows only money
