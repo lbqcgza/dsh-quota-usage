@@ -24,9 +24,39 @@ function textOf(node) {
 	return (node.children ?? []).map(textOf).join('');
 }
 
-/** Non-empty visible text of a stubbed element's direct children. */
-function textsOf(node) {
-	return (node.children ?? []).map(textOf).filter(Boolean);
+/** Every visible leaf string in a stubbed tree, in document order. */
+function leafTexts(node) {
+	const out = [];
+	const visit = (n) => {
+		if (n === null || n === undefined || n === false || n === true) return;
+		if (typeof n === 'string' || typeof n === 'number') { out.push(String(n)); return; }
+		if (Array.isArray(n)) { n.forEach(visit); return; }
+		(n.children ?? []).forEach(visit);
+	};
+	visit(node.children ?? []);
+	return out;
+}
+
+/** Depth-first search for the first element carrying one class name. */
+function findByClass(node, className) {
+	if (node === null || node === undefined || typeof node !== 'object') return undefined;
+	if (typeof node.props?.className === 'string' && node.props.className.split(' ').includes(className)) return node;
+	for (const child of node.children ?? []) {
+		const hit = findByClass(child, className);
+		if (hit !== undefined) return hit;
+	}
+	return undefined;
+}
+
+/** Depth-first search for the first element of one type. */
+function findByType(node, type) {
+	if (node === null || node === undefined || typeof node !== 'object') return undefined;
+	if (node.type === type) return node;
+	for (const child of node.children ?? []) {
+		const hit = findByType(child, type);
+		if (hit !== undefined) return hit;
+	}
+	return undefined;
 }
 
 const React = {
@@ -36,10 +66,12 @@ const React = {
 		children: children.flat().filter((child) => child !== null && child !== undefined && child !== false)
 	}),
 	useSyncExternalStore: (subscribe, getSnapshot) => getSnapshot(),
-	// Present so a hook-using render still works here, even though the widget
-	// currently reads the store without any local state of its own.
 	useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
-	useEffect: () => {}
+	// The bridge hands its reading over from an effect, so the stub has to run
+	// effects for the usage sub-title to reach the store at all.
+	useEffect: (callback) => {
+		callback();
+	}
 };
 
 const styleTags = [];
@@ -156,8 +188,8 @@ mod.apply(ctx);
 
 /* -------------------------------------------------------------- the claimed seat */
 
-assert.deepEqual(injected, ['shell.overlay', 'sidebar.footer.action'], 'the widget claims the sidebar-foot list seat');
-assert.equal(registered.length, 2, 'the pre-read phase is mirrored in the frame-wide overlay');
+assert.deepEqual(injected, ['shell.overlay', 'sidebar.footer.action', 'conversation.composer.dock'], 'the widget claims the foot seat and the session bridge seat');
+assert.equal(registered.length, 3, 'the pre-read phase is mirrored, the seat claimed, and the bridge mounted');
 assert.equal(registered[0].meta.id, 'dsh-quota-usage-state:loading');
 const seat = registered.find((entry) => entry.meta.name === 'sidebar.footer.action');
 assert.ok(seat, 'the sidebar-foot seat is registered');
@@ -167,8 +199,23 @@ assert.equal(meta.id, 'dsh-quota-usage');
 assert.equal(meta.locale, mod.NS);
 assert.equal(meta.label(), '额度');
 
+const bridge = registered.find((entry) => entry.meta.name === 'conversation.composer.dock');
+assert.ok(bridge, 'the session-scoped usage bridge is registered too');
+assert.equal(bridge.meta.id, 'dsh-quota-usage-usage');
+assert.equal(bridge.meta.order, 5);
+assert.equal(typeof bridge.component, 'function');
+
 const t = ctx.locale.bind(mod.NS);
 const render = (wide) => component({ wide, t, ...meta.inject() });
+/**
+ * Render the bridge for one session fixture, which reports into the same store
+ * the foot row reads — exactly what the real slot wiring does.
+ */
+const reportUsage = (sessionId, usage) => bridge.component({
+	sessionId,
+	useProjection: (key) => (key === 'tokenUsage' ? usage : undefined),
+	...bridge.meta.inject()
+});
 
 /* -------------------------------------------------------------- rendered states */
 
@@ -185,21 +232,24 @@ const ready = render(true);
 assert.equal(ready.type, 'button');
 assert.equal(ready.props['data-refreshing'], 'false');
 assert.deepEqual(
-	textsOf(ready),
-	['额度', '¥13.34（赠¥1.00）'],
+	leafTexts(ready),
+	['额度', '¥13.34', '（赠¥1.00）'],
 	'the ready row leads with the total credit and parenthesizes the bonus'
 );
 assert.match(ready.props.title, /^总余额 ¥13\.34 · 充值余额 ¥12\.34 · 赠金余额 ¥1\.00 · 更新于 .+ · 每 60 秒自动刷新 · 点击立即刷新$/);
 
 /* ------------------------------------ the amount owns the right edge while idle */
 
-const [label, amount, spinner] = ready.children;
+assert.equal(ready.children.length, 1, 'with no session report the row is a single credit line');
+const main = ready.children[0];
+assert.equal(main.props.className, 'dshQuota_main');
+const [label, amount, spinner] = main.children;
 assert.equal(label.props.className, 'dshQuota_label');
 assert.equal(amount.props.className, 'dshQuota_amount', 'value and bonus travel together in one group');
 assert.equal(amount.children[0].props.className, 'dshQuota_value');
 assert.equal(amount.children[1].props.className, 'dshQuota_bonus');
 assert.equal(spinner.props.className, 'dshQuota_spinner', 'the spinner trails the amount');
-assert.equal(ready.children.length, 3, 'the spinner adds no fourth flex item of its own');
+assert.equal(main.children.length, 3, 'the spinner adds no fourth flex item of its own');
 assert.equal(spinner.props.className.includes('ringSlot'), false);
 
 const sheet = styleTags[0].textContent;
@@ -262,7 +312,7 @@ const during = render(true);
 assert.equal(during.props['data-refreshing'], 'true', 'the row reports the user-initiated refresh');
 assert.match(during.props.title, /正在刷新… · 点击立即刷新$/, 'the tooltip names the in-flight refresh');
 
-const ring = during.children[2].children[0];
+const ring = findByClass(during, 'dshQuota_spinner').children[0];
 assert.equal(ring.type, 'svg', 'the spinner ring is mounted inside the spinner box');
 assert.match(ring.props.className, /dshQuota_ringSpin/, 'the ring carries the spin hook');
 assert.equal(ring.props.width, 14);
@@ -280,7 +330,7 @@ assert.match(
 await clicked;
 const settled = render(true);
 assert.equal(settled.props['data-refreshing'], 'false', 'the spinner clears as soon as the read settles');
-assert.deepEqual(textsOf(settled), ['额度', '¥13.34（赠¥1.00）'], 'the amount is back without the spinner');
+assert.deepEqual(leafTexts(settled), ['额度', '¥13.34', '（赠¥1.00）'], 'the amount is back without the spinner');
 
 /* -------------------------------------------- the click handler uses that path */
 
@@ -294,7 +344,7 @@ assert.equal(render(true).props['data-refreshing'], 'false', 'the joined read cl
 /* ------------------------------------------------------ the rail spinner (rail) */
 
 const rail = render(false);
-assert.deepEqual(textsOf(rail), ['13.34'], 'the rail row drops the symbol and the label');
+assert.deepEqual(leafTexts(rail), ['13.34'], 'the rail row drops the symbol and the label');
 assert.equal(rail.props['data-refreshing'], 'false');
 assert.equal(rail.children.length, 2, 'the rail row keeps its overlay ring mounted plus the digits');
 assert.equal(rail.children[0].props.className, 'dshQuota_ringOverlay dshQuota_ring dshQuota_ringSpin');
@@ -319,16 +369,16 @@ assert.match(
 
 balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0.004' }], bonusWallets: [] } };
 await meta.inject().quotaStore.refresh();
-assert.deepEqual(textsOf(render(true)), ['额度', '<¥0.01'], 'a positive sub-cent balance renders as <0.01');
+assert.deepEqual(leafTexts(render(true)), ['额度', '<¥0.01'], 'a positive sub-cent balance renders as <0.01');
 
 balanceResult = { ok: true, value: { status: 'ready', value: [], bonusWallets: [{ currency: 'CNY', balance: '4.34' }] } };
 await meta.inject().quotaStore.refresh();
 assert.deepEqual(
-	textsOf(render(true)),
-	['额度', '¥4.34（赠¥4.34）'],
+	leafTexts(render(true)),
+	['额度', '¥4.34', '（赠¥4.34）'],
 	'a bonus-only wallet still totals correctly and keeps the parenthesized bonus'
 );
-const bonusCell = render(true).children[1].children.find((child) => child.props?.className === 'dshQuota_bonus');
+const bonusCell = findByClass(render(true), 'dshQuota_bonus');
 assert.ok(bonusCell, 'the bonus keeps its own accent cell inside the amount group');
 
 /* ------------------------------------- the bonus bracket hides below one cent */
@@ -336,13 +386,13 @@ assert.ok(bonusCell, 'the bonus keeps its own accent cell inside the amount grou
 balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12.34' }], bonusWallets: [{ currency: 'CNY', balance: '0.004' }] } };
 await meta.inject().quotaStore.refresh();
 assert.deepEqual(
-	textsOf(render(true)),
+	leafTexts(render(true)),
 	['额度', '¥12.34'],
 	'a drained sub-cent bonus draws no bracket at all'
 );
 assert.equal(
-	render(true).children[1].children.some((child) => child.props?.className === 'dshQuota_bonus'),
-	false,
+	findByClass(render(true), 'dshQuota_bonus'),
+	undefined,
 	'there is no bonus cell to style or space'
 );
 assert.doesNotMatch(render(true).props.title, /赠金余额/, 'the tooltip drops the empty bonus row too');
@@ -350,28 +400,86 @@ assert.doesNotMatch(render(true).props.title, /赠金余额/, 'the tooltip drops
 balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12.34' }], bonusWallets: [{ currency: 'CNY', balance: '0.01' }] } };
 await meta.inject().quotaStore.refresh();
 assert.deepEqual(
-	textsOf(render(true)),
-	['额度', '¥12.35（赠¥0.01）'],
+	leafTexts(render(true)),
+	['额度', '¥12.35', '（赠¥0.01）'],
 	'one cent is the first bonus worth showing'
 );
 assert.match(render(true).props.title, /赠金余额 ¥0\.01/, 'and it appears in the tooltip');
 
 balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12.34' }], bonusWallets: [] } };
 await meta.inject().quotaStore.refresh();
-assert.deepEqual(textsOf(render(true)), ['额度', '¥12.34'], 'no bonus wallet means no bonus bracket');
+assert.deepEqual(leafTexts(render(true)), ['额度', '¥12.34'], 'no bonus wallet means no bonus bracket');
 
 balanceResult = { ok: true, value: null };
 await meta.inject().quotaStore.refresh();
-assert.deepEqual(textsOf(render(true)), ['额度', '未登录'], 'a signed-out account names its state instead of vanishing');
+assert.deepEqual(leafTexts(render(true)), ['额度', '未登录'], 'a signed-out account names its state instead of vanishing');
 
 balanceResult = { ok: false, value: undefined };
 await meta.inject().quotaStore.refresh();
-assert.deepEqual(textsOf(render(true)), ['额度', '读取失败'], 'a Remote failure renders the retry copy');
+assert.deepEqual(leafTexts(render(true)), ['额度', '读取失败'], 'a Remote failure renders the retry copy');
 
 balanceCalls.length = 0;
 balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'USD', balance: '3.5' }], bonusWallets: [] } };
 await meta.inject().quotaStore.refresh();
-assert.deepEqual(textsOf(render(true)), ['额度', '$3.50'], 'a USD wallet renders with the dollar sign and no bonus');
+assert.deepEqual(leafTexts(render(true)), ['额度', '$3.50'], 'a USD wallet renders with the dollar sign and no bonus');
+
+/* --------------------------------- the usage sub-title fed by the session bridge */
+
+// Back to a plain CNY credit so the usage assertions below read on their own.
+balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12.34' }], bonusWallets: [] } };
+await meta.inject().quotaStore.refresh();
+assert.equal(render(true).children.length, 1, 'no sub-title before any session reports');
+
+// 7M tokens split across all three prompt-side buckets plus output, chosen so the
+// Flash price list produces exact figures: off-peak 1.00 + 0.10 + 4.00, peak 2x.
+const usageFixture = {
+	uncachedInputTokens: 1_000_000,
+	cacheReadTokens: 5_000_000,
+	cacheWriteTokens: 0,
+	outputTokens: 1_000_000
+};
+reportUsage('session-fixture', usageFixture);
+const withUsage = render(true);
+assert.equal(withUsage.children.length, 2, 'a report adds the sub-title line under the credit line');
+assert.equal(withUsage.children[0].props.className, 'dshQuota_main', 'the credit line stays first');
+assert.equal(withUsage.children[1].props.className, 'dshQuota_usage');
+assert.deepEqual(
+	leafTexts(withUsage),
+	['额度', '¥12.34', '本会话 7M tokens · 约 ¥5.10–10.20'],
+	'the sub-title compacts the tokens and pairs the off-peak and peak estimates'
+);
+
+let notifications = 0;
+const stopWatching = meta.inject().quotaStore.subscribe(() => {
+	notifications = notifications + 1;
+});
+reportUsage('session-fixture', { ...usageFixture });
+assert.equal(notifications, 0, 'an identical report does not republish, so the row does not re-render for nothing');
+reportUsage('session-fixture', { ...usageFixture, outputTokens: 1_000_100 });
+assert.equal(notifications, 1, 'a changed report publishes exactly once');
+stopWatching();
+
+// Cache writes have no column of their own in the official list; they are priced
+// as cache-miss input, which is the prompt-side grouping DSH uses.
+reportUsage('session-fixture', { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 1_000_000, outputTokens: 0 });
+assert.deepEqual(
+	leafTexts(render(true)),
+	['额度', '¥12.34', '本会话 1M tokens · 约 ¥1.00–2.00'],
+	'a cache write is billed at the miss rate'
+);
+
+reportUsage('session-fixture', { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 100 });
+assert.deepEqual(
+	leafTexts(render(true)),
+	['额度', '¥12.34', '本会话 100 tokens · 约 ¥<0.01'],
+	'a sub-cent estimate collapses to a single <0.01 figure'
+);
+
+reportUsage('session-fixture', { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 });
+assert.equal(render(true).children.length, 1, 'a session with no tokens yet keeps the single-line shape');
+
+reportUsage('session-fixture', undefined);
+assert.equal(render(true).children.length, 1, 'a withdrawn report drops the sub-title again');
 
 /* ------------------------------------------- a failed mount stays inert + traceable */
 

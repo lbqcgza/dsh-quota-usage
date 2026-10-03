@@ -47,6 +47,7 @@ profiles without a Web client are not supported.
 ## What you get
 
 - **The total at a glance** — the headline is the sum of Platform's recharge wallets (`normal_wallets`) and bonus wallets (`bonus_wallets`) in one currency; the parenthesized part is the bonus, and **below one cent (zero included) the whole bracket goes away with its cell** rather than leaving a gap or a `<0.01` noise value
+- **A usage sub-title** — one line under the credit shows the **current session's** real token count and an **estimate** of what it cost (see [Usage sub-title](#usage-sub-title)); with no session open the line is not rendered and the widget stays one line
 - **Click to refresh** — clicking the row re-reads immediately and shows a circular spinner to the right of the amount for exactly as long as the read runs. Background polling, refocusing the window, and account state changes never flash the spinner
 - **The make-room motion is eased** — the amount sits flush to the right edge when idle (no space reserved for the spinner) and slides 22px left while it is up, on `cubic-bezier(.22,.61,.36,1)`. Only `transform`/`opacity` animate, so nothing reflows
 - **It never silently disappears** — loading, failed, not connected, and signed out each say so. A widget that quietly does not appear is indistinguishable from a broken plugin, so this one always renders its state
@@ -75,7 +76,42 @@ Total credit ¥13.34 · Recharge balance ¥12.34 · Bonus balance ¥1.00 · Upda
 
 Collapsed into the 56px rail (macOS / plain Web) it becomes a 36px circular button with the number
 centered and the spinner as a ring around it. Under the Windows native title bar, collapsing the
-sidebar hides the whole foot area, so it hides together with the user-name row.
+sidebar hides the whole foot area, so it hides together with the user-name row. The rail shows no
+usage sub-title — 36px has no room for it.
+
+## Usage sub-title
+
+The line under the credit comes from the **current session's** token usage and has two parts:
+
+```text
+This session 1.28M tokens · ≈¥1.20–2.40
+```
+
+- **The token count is exact** — it comes from the `tokenUsage` projection (a replay of the whole
+  persisted log, so paging and compaction do not change it), grouped the way DSH itself groups the
+  prompt side: the three disjoint buckets `uncachedInputTokens` + `cacheReadTokens` +
+  `cacheWriteTokens`, plus `outputTokens`
+- **The amount is an estimate** — the session log records **tokens only, never money** (DSH ships no
+  price list either), so it is derived from the official price list: `deepseek-flash` at 0.02 (cached
+  input) / 1 (uncached input) / 4 (output) CNY per million tokens off-peak, doubled at peak
+
+Two sources of error are inherent to the data rather than the arithmetic:
+
+1. **It can only be a range** — the projection has no per-request timeline, so historical tokens
+   cannot be attributed to peak or off-peak hours after the fact; both bands are computed and shown
+   as `¥1.20–2.40`. Peak hours are Beijing time Mon-Fri 09:00-12:00 and 14:00-18:00, excluding public
+   holidays
+2. **Cache writes are priced as cache misses** — the official list has only a hit and a miss column
+   for the prompt side, so `cacheWriteTokens` is billed at the miss rate, matching DSH's own
+   prompt-side grouping
+
+One more limit is about scope: this line covers **the current session only**. The seat the credit row
+uses, `sidebar.footer.action`, is root-scoped, and projections like `tokenUsage` can only be read
+from a session scope — so the plugin also mounts an invisible bridge component in the session-scoped
+`conversation.composer.dock` and hands the reading to the foot row. Covering a whole **workspace**
+(including sessions that were never opened) would need a host half aggregating the session logs,
+which brings a local HTTP route and does not fit the current zero-network architecture, so it is not
+done.
 
 ## Refresh cadence
 
@@ -111,6 +147,8 @@ rather than a public issue; the boundaries that matter are described in [SECURIT
   amount as `<0.01`. This is **display formatting only** — the raw balance string is not rewritten
 - The spinner lasts as long as the request actually takes, so a fast network can make it a blink
 - **A bonus under one cent is not shown** — the threshold is one cent (`MIN_VISIBLE_AMOUNT`): the formatter would only print `<0.01`, which is noise rather than a balance, so the cell is not rendered at all. The total is still computed from the real values; the threshold only affects display
+- **The usage amount is an estimate, not a bill** — the log holds no money, so the figure is derived from the official price list and can only be a range; a price change means editing `PRICE_CNY_PER_MILLION` in the code. The token count is exact
+- **Usage covers the current session only** — a workspace-wide total would need a host half and a local route; see [Usage sub-title](#usage-sub-title)
 - `CLIENT_VERSION` is currently hardcoded to `0.2.0-rc.2` (it only labels the requesting client on
   the account API; it does not affect behaviour)
 
