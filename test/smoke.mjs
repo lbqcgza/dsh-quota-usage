@@ -186,20 +186,66 @@ assert.equal(ready.type, 'button');
 assert.equal(ready.props['data-refreshing'], 'false');
 assert.deepEqual(
 	textsOf(ready),
-	['额度', '¥13.34', '（赠¥1.00）'],
+	['额度', '¥13.34（赠¥1.00）'],
 	'the ready row leads with the total credit and parenthesizes the bonus'
 );
 assert.match(ready.props.title, /^总余额 ¥13\.34 · 充值余额 ¥12\.34 · 赠金余额 ¥1\.00 · 更新于 .+ · 每 60 秒自动刷新 · 点击立即刷新$/);
 
-/* ------------------------------------------- the spinner is absent until asked */
+/* ------------------------------------ the amount owns the right edge while idle */
 
-const idleSlot = ready.children[ready.children.length - 1];
-assert.equal(idleSlot.type, 'span', 'the balance is trailed by the spinner slot');
-assert.equal(idleSlot.props.className, 'dshQuota_ringSlot');
-assert.deepEqual(idleSlot.children, [], 'the slot reserves its width but draws nothing on its own');
-assert.ok(
-	ready.children.every((child) => child.type !== 'svg'),
-	'no ring is drawn before the user asks for a refresh'
+const [label, amount, spinner] = ready.children;
+assert.equal(label.props.className, 'dshQuota_label');
+assert.equal(amount.props.className, 'dshQuota_amount', 'value and bonus travel together in one group');
+assert.equal(amount.children[0].props.className, 'dshQuota_value');
+assert.equal(amount.children[1].props.className, 'dshQuota_bonus');
+assert.equal(spinner.props.className, 'dshQuota_spinner', 'the spinner trails the amount');
+assert.equal(ready.children.length, 3, 'the spinner adds no fourth flex item of its own');
+assert.equal(spinner.props.className.includes('ringSlot'), false);
+
+const sheet = styleTags[0].textContent;
+assert.match(
+	sheet,
+	/\.dshQuota_amount\{[^}]*margin-left:auto/,
+	'the amount is pinned to the right edge, so an idle row reserves no spinner space'
+);
+assert.match(
+	sheet,
+	/\.dshQuota_spinner\{[^}]*position:absolute[^}]*opacity:0/,
+	'the idle spinner is out of flow and invisible'
+);
+assert.match(
+	sheet,
+	/\.dshQuota_spinner\{[^}]*transition:opacity[^}]*var\(--dsh-quota-ease\)/,
+	'the spinner reveals on an eased transition'
+);
+
+/* ----------------------------------------------------- the eased slide contract */
+
+assert.match(
+	sheet,
+	/--dsh-quota-ease:cubic-bezier\(/,
+	'the motion curve is non-linear, not linear or ease'
+);
+assert.doesNotMatch(sheet, /transition:[^;}]*\bl(?:inear)\b/, 'no transition falls back to a linear curve');
+assert.match(
+	sheet,
+	/\.dshQuota_amount\{[^}]*transition:transform var\(--dsh-quota-slide\) var\(--dsh-quota-ease\)/,
+	'the amount slides on that same curve'
+);
+assert.match(
+	sheet,
+	/\.dshQuota_row\[data-refreshing=true\] \.dshQuota_amount\{transform:translateX\(calc\(-1 \* \(var\(--dsh-quota-spinner\) \+ var\(--dsh-quota-gap\)\)\)\)\}/,
+	'the slide gives up exactly the spinner box plus one gap'
+);
+assert.match(
+	sheet,
+	/\.dshQuota_row\[data-refreshing=true\] \.dshQuota_spinner\{opacity:1;transform:scale\(1\)\}/,
+	'the spinner reveals when the row reports a user-initiated refresh'
+);
+assert.match(
+	sheet,
+	/@media \(prefers-reduced-motion:reduce\)\{\.dshQuota_ringSpin\{animation:none\}\.dshQuota_amount,\.dshQuota_spinner,\.dshQuota_ringOverlay\{transition:none\}\}/,
+	'reduced motion drops the spin and the slide'
 );
 
 /* ------------------------------------------------ background polling shows none */
@@ -216,22 +262,25 @@ const during = render(true);
 assert.equal(during.props['data-refreshing'], 'true', 'the row reports the user-initiated refresh');
 assert.match(during.props.title, /正在刷新… · 点击立即刷新$/, 'the tooltip names the in-flight refresh');
 
-const spinnerSlot = during.children[during.children.length - 1];
-assert.equal(spinnerSlot.props.className, 'dshQuota_ringSlot', 'the spinner keeps the trailing slot');
-const spinner = spinnerSlot.children[0];
-assert.equal(spinner.type, 'svg', 'the spinner is drawn inside the trailing slot');
-assert.match(spinner.props.className, /dshQuota_ringSpin/, 'the ring spins');
-assert.equal(spinner.props.width, 14);
-assert.equal(spinner.props['aria-hidden'], 'true');
-assert.equal(spinner.children.length, 2, 'the spinner has a track and an arc');
+const ring = during.children[2].children[0];
+assert.equal(ring.type, 'svg', 'the spinner ring is mounted inside the spinner box');
+assert.match(ring.props.className, /dshQuota_ringSpin/, 'the ring carries the spin hook');
+assert.equal(ring.props.width, 14);
+assert.equal(ring.props['aria-hidden'], 'true');
+assert.equal(ring.children.length, 2, 'the spinner has a track and an arc');
 const spinnerCircumference = 2 * Math.PI * (14 - 2) / 2;
-assert.equal(spinner.children[1].props.strokeDasharray, spinnerCircumference);
-assert.equal(spinner.children[1].props.strokeDashoffset, spinnerCircumference * 0.75, 'a quarter of the ring is drawn');
+assert.equal(ring.children[1].props.strokeDasharray, spinnerCircumference);
+assert.equal(ring.children[1].props.strokeDashoffset, spinnerCircumference * 0.75, 'a quarter of the ring is drawn');
+assert.match(
+	sheet,
+	/\.dshQuota_row\[data-refreshing=true\] \.dshQuota_ringSpin,\.dshQuota_rowRail\[data-refreshing=true\] \.dshQuota_ringSpin\{animation:dshQuota_spin/,
+	'the spin only runs while the indicator is up'
+);
 
 await clicked;
 const settled = render(true);
 assert.equal(settled.props['data-refreshing'], 'false', 'the spinner clears as soon as the read settles');
-assert.ok(settled.children.every((child) => child.type !== 'svg' || child.props.width !== 14), 'no wide spinner remains');
+assert.deepEqual(textsOf(settled), ['额度', '¥13.34（赠¥1.00）'], 'the amount is back without the spinner');
 
 /* -------------------------------------------- the click handler uses that path */
 
@@ -247,8 +296,9 @@ assert.equal(render(true).props['data-refreshing'], 'false', 'the joined read cl
 const rail = render(false);
 assert.deepEqual(textsOf(rail), ['13.34'], 'the rail row drops the symbol and the label');
 assert.equal(rail.props['data-refreshing'], 'false');
-assert.equal(rail.children.length, 1, 'the idle rail row is only its digits');
-assert.equal(rail.children[0].props.className, 'dshQuota_railValue');
+assert.equal(rail.children.length, 2, 'the rail row keeps its overlay ring mounted plus the digits');
+assert.equal(rail.children[0].props.className, 'dshQuota_ringOverlay dshQuota_ring dshQuota_ringSpin');
+assert.equal(rail.children[1].props.className, 'dshQuota_railValue', 'the digits sit above the ring');
 
 const railClicked = meta.inject().quotaStore.refreshNow();
 const railDuring = render(false);
@@ -258,7 +308,14 @@ assert.equal(railDuring.children[0].props.width, 34);
 assert.equal(railDuring.children[0].props.className, 'dshQuota_ringOverlay dshQuota_ring dshQuota_ringSpin');
 assert.equal(railDuring.children[1].props.className, 'dshQuota_railValue', 'the digits sit above the ring');
 await railClicked;
-assert.equal(render(false).children.length, 1, 'the rail spinner clears with the read');
+const railSettled = render(false);
+assert.equal(railSettled.props['data-refreshing'], 'false', 'the rail spinner clears with the read');
+assert.equal(railSettled.children.length, 2, 'the ring stays mounted so its fade-out can animate');
+assert.match(
+	sheet,
+	/\.dshQuota_rowRail\[data-refreshing=true\] \.dshQuota_ringOverlay\{opacity:1;transform:scale\(1\)\}/,
+	'the rail ring is revealed by the same attribute'
+);
 
 balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0.004' }], bonusWallets: [] } };
 await meta.inject().quotaStore.refresh();
@@ -268,11 +325,11 @@ balanceResult = { ok: true, value: { status: 'ready', value: [], bonusWallets: [
 await meta.inject().quotaStore.refresh();
 assert.deepEqual(
 	textsOf(render(true)),
-	['额度', '¥4.34', '（赠¥4.34）'],
+	['额度', '¥4.34（赠¥4.34）'],
 	'a bonus-only wallet still totals correctly and keeps the parenthesized bonus'
 );
-const bonusCell = render(true).children.find((child) => child.props?.className === 'dshQuota_bonus');
-assert.ok(bonusCell, 'the bonus keeps its own accent cell');
+const bonusCell = render(true).children[1].children.find((child) => child.props?.className === 'dshQuota_bonus');
+assert.ok(bonusCell, 'the bonus keeps its own accent cell inside the amount group');
 
 balanceResult = { ok: true, value: null };
 await meta.inject().quotaStore.refresh();
