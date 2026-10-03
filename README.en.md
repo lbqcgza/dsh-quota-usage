@@ -6,6 +6,7 @@
 
 [中文](README.md) | English
 
+[![release](https://img.shields.io/github/v/release/lbqcgza/dsh-quota-usage?style=flat)](https://github.com/lbqcgza/dsh-quota-usage/releases)
 [![stars](https://img.shields.io/github/stars/lbqcgza/dsh-quota-usage?style=flat)](https://github.com/lbqcgza/dsh-quota-usage)
 [![license](https://img.shields.io/github/license/lbqcgza/dsh-quota-usage)](LICENSE)
 ![DSH web client](https://img.shields.io/badge/DSH-web%20client-5773ff)
@@ -103,7 +104,7 @@ Two sources of error are inherent to the data rather than the arithmetic:
 
 ### The switch
 
-**Settings → General → Credit usage sub-title** turns the line off. The choice is kept in
+**Settings → General → Session usage display** turns the line off. The choice is kept in
 the browser (`dsh-quota-usage:show-usage` in `localStorage`, the only key this plugin
 writes), and switching it off removes both the sub-title and the usage segment of the
 tooltip. With no session open the line is not rendered at all and the widget stays a
@@ -121,8 +122,10 @@ zero-network architecture, so it is not done.
 
 ## Refresh cadence
 
-- One read on mount; **a 5s retry until the first result lands** (the account namespace is a service
-  the host mounts asynchronously, so it can arrive after this plugin does), then 60s
+- One read on mount; **a 5s retry until the account namespace answers** (the host mounts it
+  asynchronously, so it can arrive after this plugin does), then 60s. "Answers" includes a failed
+  read and a signed-out account, because either one proves the interface is there and retrying
+  faster would change nothing
 - Re-read when the page becomes visible, when the window regains focus, and on connection reset
 - Subscribes to the `account.watch` stream, so signing in or out re-reads immediately
 - **Clicking the row** re-reads immediately and shows the spinner for that read

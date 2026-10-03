@@ -6,6 +6,7 @@
 
 中文 | [English](README.en.md)
 
+[![release](https://img.shields.io/github/v/release/lbqcgza/dsh-quota-usage?style=flat)](https://github.com/lbqcgza/dsh-quota-usage/releases)
 [![stars](https://img.shields.io/github/stars/lbqcgza/dsh-quota-usage?style=flat)](https://github.com/lbqcgza/dsh-quota-usage)
 [![license](https://img.shields.io/github/license/lbqcgza/dsh-quota-usage)](LICENSE)
 ![DSH web client](https://img.shields.io/badge/DSH-web%20client-5773ff)
@@ -109,7 +110,7 @@ Windows 原生标题栏下侧边栏收起时整个底部区域由 shell 隐藏�
 
 ### 开关
 
-**设置 → 通用 → 额度用量副标题** 可以关掉这一行。开关状态记在浏览器本地（`localStorage` 的
+**设置 → 通用 → 本会话用量显示** 可以关掉这一行。开关状态记在浏览器本地（`localStorage` 的
 `dsh-quota-usage:show-usage`，这是本插件唯一写入的键），关掉后副标题与悬停提示里的用量段一起消失。
 没打开任何会话时这一行本来就不渲染，组件仍是单行。
 
@@ -123,7 +124,8 @@ Windows 原生标题栏下侧边栏收起时整个底部区域由 shell 隐藏�
 
 ## 刷新节奏
 
-- 挂载时读一次；**未拿到首个结果前每 5 秒重试**（账号命名空间是宿主异步挂载的独立服务，可能比本插件晚就绪），拿到后转为每 60 秒
+- 挂载时读一次；**账号命名空间答复之前每 5 秒重试**（它是宿主异步挂载的独立服务，可能比本插件晚就绪），
+  一旦答复过就转为每 60 秒 —— 注意"答复"包括读取失败与未登录，因为那说明接口已经在，再快也没用
 - 页面重新可见、窗口获得焦点、连接重置时重读
 - 订阅 `account.watch` 账号状态流，登录 / 登出后立刻重读
 - **点击整行**立刻重读一次，并在读取期间显示转圈
@@ -135,7 +137,7 @@ Windows 原生标题栏下侧边栏收起时整个底部区域由 shell 隐藏�
 - **不注册任何 HTTP 路由** —— host 半侧是空的 `apply`，只为让包在 Loader 里占一行
 - **不执行命令、不读文件**
 - **只发一次调用** —— `remote.account.getBalance`，与官方「设置 → 账号」页同源；随请求的元数据**只有** `version`（DSH 版本号）、`locale`（界面语言）、`timezoneOffsetSeconds`（UTC 偏移）三项，与官方账号页逐字一致，没有设备 ID / 用户 ID
-- **不写浏览器状态** —— `localStorage`、`sessionStorage`、cookie、`indexedDB` 全无使用。**唯一的例外**是那一个显示偏好键 `dsh-quota-usage:show-usage`（用量副标题的开关状态），它不出浏览器、不参与任何请求
+- **不写浏览器状态** —— `localStorage`、`sessionStorage`、cookie、`indexedDB` 全无使用。**唯一的例外**是那一个显示偏好键 `dsh-quota-usage:show-usage`（即「本会话用量显示」开关的状态），它不出浏览器、不参与任何请求
 - **没有任何遥测出口** —— 代码里没有 `fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon`
 
 需要报告安全问题请用 [私密漏洞报告](https://github.com/lbqcgza/dsh-quota-usage/security/advisories/new)，
