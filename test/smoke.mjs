@@ -24,13 +24,27 @@ function textOf(node) {
 	return (node.children ?? []).map(textOf).join('');
 }
 
+/** Non-empty visible text of a stubbed element's direct children. */
+function textsOf(node) {
+	return (node.children ?? []).map(textOf).filter(Boolean);
+}
+
+/**
+ * Freeze the clock before the bundle is materialized so the refresh indicator's
+ * countdown is exactly one full cycle at render time. `new Date()` is untouched.
+ */
+const FIXED_NOW = 1_700_000_000_000;
+Date.now = () => FIXED_NOW;
+
 const React = {
 	createElement: (type, props, ...children) => ({
 		type,
 		props: props ?? {},
 		children: children.flat().filter((child) => child !== null && child !== undefined && child !== false)
 	}),
-	useSyncExternalStore: (subscribe, getSnapshot) => getSnapshot()
+	useSyncExternalStore: (subscribe, getSnapshot) => getSnapshot(),
+	useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
+	useEffect: () => {}
 };
 
 const styleTags = [];
@@ -174,41 +188,79 @@ assert.equal(timers[1].delay, 60_000, 'the settled cadence is the steady one');
 
 const ready = render(true);
 assert.equal(ready.type, 'button');
+assert.equal(ready.props['data-refreshing'], 'false');
 assert.deepEqual(
-	ready.children.map(textOf),
+	textsOf(ready),
 	['额度', '¥13.34', '（赠¥1.00）'],
 	'the ready row leads with the total credit and parenthesizes the bonus'
 );
-assert.match(ready.props.title, /^总余额 ¥13\.34 · 充值余额 ¥12\.34 · 赠金余额 ¥1\.00 · 更新于 .+ · 点击刷新$/);
+assert.match(ready.props.title, /^总余额 ¥13\.34 · 充值余额 ¥12\.34 · 赠金余额 ¥1\.00 · 更新于 .+ · 60 秒后自动刷新 · 点击立即刷新$/);
+
+/* ------------------------------------------------- the refresh indicator (wide) */
+
+const ring = ready.children[0];
+assert.equal(ring.type, 'svg', 'the wide row leads with the refresh indicator');
+assert.equal(ring.props.width, 14);
+assert.equal(ring.props['aria-hidden'], 'true');
+assert.equal(ring.children.length, 2, 'the indicator draws a track and an arc');
+
+const [track, arc] = ring.children;
+const circumference = 2 * Math.PI * (14 - 2) / 2;
+assert.equal(track.type, 'circle');
+assert.equal(track.props.className, 'dshQuota_ringTrack');
+assert.equal(arc.type, 'circle');
+assert.equal(arc.props.className, 'dshQuota_ringArc');
+assert.equal(arc.props.strokeDasharray, circumference);
+assert.equal(arc.props.strokeDashoffset, 0, 'a fresh cycle leaves the arc fully drawn');
+assert.doesNotMatch(ring.props.className, /ringSpin/, 'an idle indicator does not spin');
+
+/* ------------------------------------------------------- the indicator mid-flight */
+
+const inFlight = meta.inject().quotaStore.refresh();
+const during = render(true);
+assert.equal(during.props['data-refreshing'], 'true', 'the row reports the in-flight refresh');
+assert.match(during.props.title, /正在刷新… · 点击立即刷新$/, 'the tooltip names the in-flight refresh');
+assert.match(during.children[0].props.className, /dshQuota_ringSpin/, 'the arc spins while a read is in flight');
+assert.equal(during.children[0].children[1].props.strokeDashoffset, circumference * 0.75, 'the spinning arc holds a quarter turn');
+await inFlight;
+
+/* ------------------------------------------------------ the refresh indicator (rail) */
 
 const rail = render(false);
-assert.deepEqual(rail.children.map(textOf), ['13.34'], 'the rail row drops the symbol and the label');
+assert.deepEqual(textsOf(rail), ['13.34'], 'the rail row drops the symbol and the label');
+const railRing = rail.children[0];
+assert.equal(railRing.type, 'svg');
+assert.equal(railRing.props.width, 36, 'the rail indicator wraps the whole circular button');
+assert.equal(railRing.props.className, 'dshQuota_ringOverlay dshQuota_ring', 'the rail indicator is the overlay layer');
+assert.equal(rail.children[1].props.className, 'dshQuota_railValue', 'the digits sit above the ring');
 
 balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '0.004' }], bonusWallets: [] } };
 await meta.inject().quotaStore.refresh();
-assert.deepEqual(render(true).children.map(textOf), ['额度', '<¥0.01'], 'a positive sub-cent balance renders as <0.01');
+assert.deepEqual(textsOf(render(true)), ['额度', '<¥0.01'], 'a positive sub-cent balance renders as <0.01');
 
 balanceResult = { ok: true, value: { status: 'ready', value: [], bonusWallets: [{ currency: 'CNY', balance: '4.34' }] } };
 await meta.inject().quotaStore.refresh();
 assert.deepEqual(
-	render(true).children.map(textOf),
+	textsOf(render(true)),
 	['额度', '¥4.34', '（赠¥4.34）'],
 	'a bonus-only wallet still totals correctly and keeps the parenthesized bonus'
 );
-assert.equal(render(true).children[2].props.className, 'dshQuota_bonus', 'the bonus keeps its own accent cell');
+const bonusCell = render(true).children.find((child) => child.props?.className === 'dshQuota_bonus');
+assert.ok(bonusCell, 'the bonus keeps its own accent cell');
 
 balanceResult = { ok: true, value: null };
 await meta.inject().quotaStore.refresh();
-assert.deepEqual(render(true).children.map(textOf), ['额度', '未登录'], 'a signed-out account names its state instead of vanishing');
+assert.deepEqual(textsOf(render(true)), ['额度', '未登录'], 'a signed-out account names its state instead of vanishing');
+assert.equal(render(true).children[0].props.className, 'dshQuota_ring', 'a non-ready row shows the bare indicator track');
 
 balanceResult = { ok: false, value: undefined };
 await meta.inject().quotaStore.refresh();
-assert.deepEqual(render(true).children.map(textOf), ['额度', '读取失败'], 'a Remote failure renders the retry copy');
+assert.deepEqual(textsOf(render(true)), ['额度', '读取失败'], 'a Remote failure renders the retry copy');
 
 balanceCalls.length = 0;
 balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'USD', balance: '3.5' }], bonusWallets: [] } };
 await meta.inject().quotaStore.refresh();
-assert.deepEqual(render(true).children.map(textOf), ['额度', '$3.50'], 'a USD wallet renders with the dollar sign and no bonus');
+assert.deepEqual(textsOf(render(true)), ['额度', '$3.50'], 'a USD wallet renders with the dollar sign and no bonus');
 
 /* ------------------------------------------- a failed mount stays inert + traceable */
 
