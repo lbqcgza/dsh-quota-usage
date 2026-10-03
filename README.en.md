@@ -64,7 +64,7 @@ account launcher).
 | --- | --- | --- |
 | `loading` | Loading… | The first read has not returned |
 | `ready` | `¥13.34 (bonus ¥1.00)` | Normal |
-| `failed` | Unavailable | The Remote call failed (the last good value is kept) |
+| `failed` | Unavailable | The call failed, came back not ready, or came back with no wallet at all (the last good value is kept) |
 | `unavailable` | Not connected | The page has no `remote.account` service yet; retrying fast |
 | `signed-out` | Signed out | The host holds no usable credential |
 

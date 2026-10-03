@@ -72,7 +72,7 @@ plugin_manager install_bundle  target = <本仓库绝对路径>
 | --- | --- | --- |
 | `loading` | 读取中… | 首次读取尚未返回 |
 | `ready` | `¥13.34（赠¥1.00）` | 正常 |
-| `failed` | 读取失败 | Remote 调用失败（保留上一次有效数字） |
+| `failed` | 读取失败 | 调用失败、返回未就绪、或返回成功但没有任何钱包（保留上一次有效数字） |
 | `unavailable` | 未连接 | 页面还没有 `remote.account` 服务，正在快速重试 |
 | `signed-out` | 未登录 | 宿主侧没有可用凭证 |
 

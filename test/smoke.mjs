@@ -571,6 +571,71 @@ assert.match(render(true).props.title, /本会话用量/, 'the tooltip follows t
 // second refresh path, so it is a separate seat entirely.
 assert.equal(typeof render(true).props.onClick, 'function');
 
+/* ------------------- a failed refresh must not restamp the value it kept */
+
+const realNow = Date.now;
+try {
+	balanceResult = { ok: true, value: { status: 'ready', value: [{ currency: 'CNY', balance: '12.34' }], bonusWallets: [] } };
+	Date.now = () => 1_700_000_000_000;
+	await meta.inject().quotaStore.refresh();
+	const settledTitle = render(true).props.title;
+	assert.match(settledTitle, /更新于 \d{2}:\d{2}/, 'a successful read dates the value it stored');
+
+	// Ten minutes later the read fails. The row keeps the last good amount, so the
+	// tooltip has to keep dating THAT value rather than the attempt.
+	Date.now = () => 1_700_000_600_000;
+	balanceResult = { ok: false, value: undefined };
+	await meta.inject().quotaStore.refresh();
+	assert.equal(
+		render(true).props.title,
+		settledTitle,
+		'a failed attempt leaves the kept value dated when it was actually read'
+	);
+	assert.ok(leafTexts(render(true)).includes('¥12.34'), 'and the kept amount is still the last good one');
+} finally {
+	Date.now = realNow;
+}
+
+/* ------------- a ready account with no wallet must not claim to be loading */
+
+const emptyRegistered = [];
+const emptyCtx = {
+	...ctx,
+	remote: {
+		account: {
+			getBalance: async () => ({ ok: true, value: { status: 'ready', value: [], bonusWallets: [] } })
+		}
+	},
+	slots: {
+		inject: (name, callback) => {
+			callback();
+			return () => {};
+		},
+		register: (entryMeta, entryComponent) => {
+			emptyRegistered.push({ meta: entryMeta, component: entryComponent });
+			return () => {};
+		}
+	}
+};
+
+mod.apply(emptyCtx);
+await Promise.resolve();
+await Promise.resolve();
+
+const emptySeat = emptyRegistered.find((entry) => entry.meta.id === 'dsh-quota-usage');
+assert.ok(emptySeat, 'a second mount over a walletless account still claims the seat');
+const emptyRow = emptySeat.component({ wide: true, t, ...emptySeat.meta.inject() });
+assert.deepEqual(
+	leafTexts(emptyRow),
+	['额度', '读取失败'],
+	'a ready read that carried no wallet names that state instead of rendering "loading" forever'
+);
+assert.match(emptyRow.props.title, /^额度读取失败/, 'and the tooltip says the read failed rather than that it is in progress');
+assert.ok(
+	emptyRegistered.some((entry) => entry.meta.id === 'dsh-quota-usage-state:failed'),
+	'the phase mirror reports the failure too, not a permanent loading state'
+);
+
 /* ------------------------------------------- a failed mount stays inert + traceable */
 
 const diagInjections = [];
