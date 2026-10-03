@@ -78,40 +78,43 @@ Collapsed into the 56px rail (macOS / plain Web) it becomes a 36px circular butt
 centered and the spinner as a ring around it. Under the Windows native title bar, collapsing the
 sidebar hides the whole foot area, so it hides together with the user-name row. The rail shows no
 usage sub-title — 36px has no room for it.
-
 ## Usage sub-title
 
-The line under the credit comes from the **current session's** token usage and has two parts:
+The line under the credit is the **current session's** estimated usage:
 
 ```text
-This session 1.28M tokens · ≈¥1.20–2.40
+≈¥1.20–2.40
 ```
 
-- **The token count is exact** — it comes from the `tokenUsage` projection (a replay of the whole
-  persisted log, so paging and compaction do not change it), grouped the way DSH itself groups the
-  prompt side: the three disjoint buckets `uncachedInputTokens` + `cacheReadTokens` +
-  `cacheWriteTokens`, plus `outputTokens`
-- **The amount is an estimate** — the session log records **tokens only, never money** (DSH ships no
-  price list either), so it is derived from the official price list: `deepseek-flash` at 0.02 (cached
-  input) / 1 (uncached input) / 4 (output) CNY per million tokens off-peak, doubled at peak
+It is **left-aligned with the `Credit` label above it** — a `<button>` carries
+`text-align: center` from the UA stylesheet, which would centre this full-width line, so
+the plugin sets `text-align: left` explicitly.
+
+- **The amount is an estimate** — the session log records **tokens only, never money** (DSH ships no price list either), so it is derived from the official price list: `deepseek-flash` at 0.02 (cached input) / 1 (uncached input) / 4 (output) CNY per million tokens off-peak, doubled at peak
+- **The token count lives in the tooltip** — it comes from the `tokenUsage` projection (a replay of the whole persisted log, so paging and compaction do not change it), grouped the way DSH itself groups the prompt side: the three disjoint buckets `uncachedInputTokens` + `cacheReadTokens` + `cacheWriteTokens`, plus `outputTokens`. Hover for the exact count; the sub-title shows only money
 
 Two sources of error are inherent to the data rather than the arithmetic:
 
-1. **It can only be a range** — the projection has no per-request timeline, so historical tokens
-   cannot be attributed to peak or off-peak hours after the fact; both bands are computed and shown
-   as `¥1.20–2.40`. Peak hours are Beijing time Mon-Fri 09:00-12:00 and 14:00-18:00, excluding public
-   holidays
-2. **Cache writes are priced as cache misses** — the official list has only a hit and a miss column
-   for the prompt side, so `cacheWriteTokens` is billed at the miss rate, matching DSH's own
-   prompt-side grouping
+1. **It can only be a range** — the projection has no per-request timeline, so historical tokens cannot be attributed to peak or off-peak hours after the fact; both bands are computed and shown as `¥1.20–2.40`. Peak hours are Beijing time Mon-Fri 09:00-12:00 and 14:00-18:00, excluding public holidays
+2. **Cache writes are priced as cache misses** — the official list has only a hit and a miss column for the prompt side, so `cacheWriteTokens` is billed at the miss rate, matching DSH's own prompt-side grouping
 
-One more limit is about scope: this line covers **the current session only**. The seat the credit row
-uses, `sidebar.footer.action`, is root-scoped, and projections like `tokenUsage` can only be read
-from a session scope — so the plugin also mounts an invisible bridge component in the session-scoped
-`conversation.composer.dock` and hands the reading to the foot row. Covering a whole **workspace**
-(including sessions that were never opened) would need a host half aggregating the session logs,
-which brings a local HTTP route and does not fit the current zero-network architecture, so it is not
-done.
+### The switch
+
+**Settings → General → Credit usage sub-title** turns the line off. The choice is kept in
+the browser (`dsh-quota-usage:show-usage` in `localStorage`, the only key this plugin
+writes), and switching it off removes both the sub-title and the usage segment of the
+tooltip. With no session open the line is not rendered at all and the widget stays a
+single row.
+
+### Scope
+
+This line covers **the current session only**. The seat the credit row uses,
+`sidebar.footer.action`, is root-scoped, and projections like `tokenUsage` can only be read
+from a session scope — so the plugin also mounts an invisible bridge component in the
+session-scoped `conversation.composer.dock` and hands the reading to the foot row. Covering
+a whole **workspace** (including sessions that were never opened) would need a host half
+aggregating the session logs, which brings a local HTTP route and does not fit the current
+zero-network architecture, so it is not done.
 
 ## Refresh cadence
 
@@ -129,7 +132,7 @@ done.
 - **Registers no HTTP routes** — the host half is an empty `apply` that exists only so the package holds a Loader row
 - **Runs no commands and reads no files**
 - **Exactly one outbound call** — `remote.account.getBalance`, the same namespace the shipped Settings → Account page reads. The metadata on it is **only** `version` (DSH build), `locale` (UI language), and `timezoneOffsetSeconds` (UTC offset) — the same three fields the official account pages send, with no device ID and no user ID
-- **Writes no browser state** — no `localStorage`, `sessionStorage`, cookie, or `indexedDB` use
+- **Writes no browser state**, with one exception: the display preference `dsh-quota-usage:show-usage` in `localStorage`, which remembers whether the usage sub-title is drawn. It never leaves the browser and never joins a request
 - **No telemetry egress at all** — there is no `fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon` anywhere in the code
 
 Please report security problems through

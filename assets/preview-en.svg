@@ -2,10 +2,10 @@
   <title>dsh-quota-usage — idle and while refreshing</title>
   <style>
     .plate { fill: #f2f3f8; stroke: #e4e6ee; stroke-width: 1; }
-    .head { font: 500 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
     .label { font: 400 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #6b7280; }
     .value { font: 600 17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
     .bonus { font: 400 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #111827; }
+    .sub { font: 400 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #8b93a1; }
     .muted { font: 400 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #9aa1ad; }
     .caption { font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #9aa1ad; }
     .step { font: 500 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #6b7280; }
@@ -15,31 +15,33 @@
     .arc { fill: none; stroke: #6b7280; stroke-width: 2; stroke-linecap: round; }
   </style>
 
-  <text class="step" x="24" y="34">1 — Idle: the amount sits flush right, reserving no room for the spinner</text>
+  <text class="step" x="24" y="34">1 — Idle: the amount sits flush right; the usage line aligns with the label above</text>
   <rect class="plate" x="24" y="46" width="672" height="170" rx="14"/>
 
-  <text class="label" x="64" y="100">Credit</text>
-  <text class="value" x="592" y="100" text-anchor="end">¥13.34</text>
-  <text class="bonus" x="672" y="100" text-anchor="end"> (bonus ¥1.00)</text>
+  <text class="label" x="64" y="86">Credit</text>
+  <text class="value" x="592" y="86" text-anchor="end">¥13.34</text>
+  <text class="bonus" x="672" y="86" text-anchor="end"> (bonus ¥1.00)</text>
+  <text class="sub" x="64" y="104">≈¥1.20–2.40</text>
 
-  <circle class="icon" cx="72" cy="149" r="8"/>
-  <text class="muted" x="96" y="154">Settings</text>
-  <circle class="avatar" cx="72" cy="193" r="10"/>
-  <text class="muted" x="96" y="198">Sign-in name</text>
+  <circle class="icon" cx="72" cy="145" r="8"/>
+  <text class="muted" x="96" y="150">Settings</text>
+  <circle class="avatar" cx="72" cy="187" r="10"/>
+  <text class="muted" x="96" y="192">Sign-in name</text>
 
   <text class="step" x="24" y="238">2 — Manual refresh: the spinner appears right of the amount, which slides 22px left</text>
   <rect class="plate" x="24" y="250" width="672" height="170" rx="14"/>
 
-  <text class="label" x="64" y="304">Credit</text>
-  <text class="value" x="570" y="304" text-anchor="end">¥13.34</text>
-  <text class="bonus" x="650" y="304" text-anchor="end"> (bonus ¥1.00)</text>
-  <circle class="track" cx="665" cy="298" r="7"/>
-  <circle class="arc" cx="665" cy="298" r="7" stroke-dasharray="32.99 11.00" transform="rotate(-90 665 298)"/>
+  <text class="label" x="64" y="290">Credit</text>
+  <text class="value" x="570" y="290" text-anchor="end">¥13.34</text>
+  <text class="bonus" x="650" y="290" text-anchor="end"> (bonus ¥1.00)</text>
+  <text class="sub" x="64" y="308">≈¥1.20–2.40</text>
+  <circle class="track" cx="665" cy="284" r="7"/>
+  <circle class="arc" cx="665" cy="284" r="7" stroke-dasharray="32.99 11.00" transform="rotate(-90 665 284)"/>
 
-  <circle class="icon" cx="72" cy="353" r="8"/>
-  <text class="muted" x="96" y="358">Settings</text>
-  <circle class="avatar" cx="72" cy="397" r="10"/>
-  <text class="muted" x="96" y="402">Sign-in name</text>
+  <circle class="icon" cx="72" cy="349" r="8"/>
+  <text class="muted" x="96" y="354">Settings</text>
+  <circle class="avatar" cx="72" cy="391" r="10"/>
+  <text class="muted" x="96" y="396">Sign-in name</text>
 
-  <text class="caption" x="360" y="442" text-anchor="middle">Schematic drawn at the real sizes and colours — not a screenshot</text>
+  <text class="caption" x="360" y="442" text-anchor="middle">Schematic at the real sizes and colours — not a screenshot · the usage line toggles in Settings → General</text>
 </svg>

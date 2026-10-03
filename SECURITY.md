@@ -28,8 +28,15 @@ Harness. It has no server side of its own:
   Settings → Account page reads, and the only data on it is the calling client's
   metadata (`version`, `locale`, `timezoneOffsetSeconds`) — the same three
   fields the official account pages send.
-- **It writes no browser state.** No `localStorage`, `sessionStorage`, cookie,
-  or `indexedDB` use.
+- **It writes no browser state**, with exactly one exception: the display
+  preference `dsh-quota-usage:show-usage` in `localStorage`, which remembers
+  whether the usage sub-title is drawn. It never leaves the browser, is not part
+  of any request, and is the only key the plugin touches.
+
+The usage sub-title is derived, not observed: the session log records token counts
+and no money at all, so the amount it shows is computed from DeepSeek's published
+price list and presented as a range. The token counts themselves come from the
+shipped `tokenUsage` projection, read through the host's own session machinery.
 
 The most useful reports are about the boundaries: a balance value or account
 field rendered where it should not be; anything that leaves the widget's own DOM

@@ -75,6 +75,7 @@ const React = {
 };
 
 const styleTags = [];
+const storage = new Map();
 const documentStub = {
 	querySelector: () => null,
 	createElement: () => ({ dataset: {}, textContent: '' }),
@@ -101,7 +102,15 @@ const windowStub = {
 		}
 	},
 	addEventListener: () => {},
-	removeEventListener: () => {}
+	removeEventListener: () => {},
+	// The preference is the only thing the plugin stores, so the stub has to be
+	// able to hold it and hand it back.
+	localStorage: {
+		getItem: (key) => (storage.has(key) ? storage.get(key) : null),
+		setItem: (key, value) => {
+			storage.set(key, String(value));
+		}
+	}
 };
 
 new Function('window', 'document', 'setInterval', 'clearInterval', source)(
@@ -188,8 +197,12 @@ mod.apply(ctx);
 
 /* -------------------------------------------------------------- the claimed seat */
 
-assert.deepEqual(injected, ['shell.overlay', 'sidebar.footer.action', 'conversation.composer.dock'], 'the widget claims the foot seat and the session bridge seat');
-assert.equal(registered.length, 3, 'the pre-read phase is mirrored, the seat claimed, and the bridge mounted');
+assert.deepEqual(
+	injected,
+	['shell.overlay', 'sidebar.footer.action', 'conversation.composer.dock', 'settings.general.item'],
+	'the widget claims the foot seat, the session bridge seat, and its preference row'
+);
+assert.equal(registered.length, 4, 'the pre-read phase is mirrored, the seat claimed, the bridge mounted, the switch added');
 assert.equal(registered[0].meta.id, 'dsh-quota-usage-state:loading');
 const seat = registered.find((entry) => entry.meta.name === 'sidebar.footer.action');
 assert.ok(seat, 'the sidebar-foot seat is registered');
@@ -204,6 +217,13 @@ assert.ok(bridge, 'the session-scoped usage bridge is registered too');
 assert.equal(bridge.meta.id, 'dsh-quota-usage-usage');
 assert.equal(bridge.meta.order, 5);
 assert.equal(typeof bridge.component, 'function');
+
+const pref = registered.find((entry) => entry.meta.name === 'settings.general.item');
+assert.ok(pref, 'the usage switch has a row in Settings → General');
+assert.equal(pref.meta.id, 'dsh-quota-usage-usage');
+assert.equal(pref.meta.order, 31, 'it sits just after the composer performance-usage row');
+assert.equal(pref.meta.label(), '额度用量副标题');
+const renderPref = () => pref.component({ t, ...pref.meta.inject() });
 
 const t = ctx.locale.bind(mod.NS);
 const render = (wide) => component({ wide, t, ...meta.inject() });
@@ -253,6 +273,11 @@ assert.equal(main.children.length, 3, 'the spinner adds no fourth flex item of i
 assert.equal(spinner.props.className.includes('ringSlot'), false);
 
 const sheet = styleTags[0].textContent;
+assert.match(
+	sheet,
+	/\.dshQuota_row\{[^}]*text-align:left/,
+	'a button centres its content by default, which would centre the full-width usage line under the left-aligned label'
+);
 assert.match(
 	sheet,
 	/\.dshQuota_amount\{[^}]*margin-left:auto/,
@@ -445,8 +470,13 @@ assert.equal(withUsage.children[0].props.className, 'dshQuota_main', 'the credit
 assert.equal(withUsage.children[1].props.className, 'dshQuota_usage');
 assert.deepEqual(
 	leafTexts(withUsage),
-	['额度', '¥12.34', '本会话 7M tokens · 约 ¥5.10–10.20'],
-	'the sub-title compacts the tokens and pairs the off-peak and peak estimates'
+	['额度', '¥12.34', '约 ¥5.10–10.20'],
+	'the sub-title shows the money alone, as an off-peak to peak range'
+);
+assert.match(
+	withUsage.props.title,
+	/本会话用量 7M tokens · 估算 ¥5\.10–10\.20 · token 取自会话日志/,
+	'the exact token count and the estimate caveat live in the tooltip instead'
 );
 
 let notifications = 0;
@@ -464,14 +494,14 @@ stopWatching();
 reportUsage('session-fixture', { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 1_000_000, outputTokens: 0 });
 assert.deepEqual(
 	leafTexts(render(true)),
-	['额度', '¥12.34', '本会话 1M tokens · 约 ¥1.00–2.00'],
+	['额度', '¥12.34', '约 ¥1.00–2.00'],
 	'a cache write is billed at the miss rate'
 );
 
 reportUsage('session-fixture', { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 100 });
 assert.deepEqual(
 	leafTexts(render(true)),
-	['额度', '¥12.34', '本会话 100 tokens · 约 ¥<0.01'],
+	['额度', '¥12.34', '约 ¥<0.01'],
 	'a sub-cent estimate collapses to a single <0.01 figure'
 );
 
@@ -480,6 +510,40 @@ assert.equal(render(true).children.length, 1, 'a session with no tokens yet keep
 
 reportUsage('session-fixture', undefined);
 assert.equal(render(true).children.length, 1, 'a withdrawn report drops the sub-title again');
+
+/* --------------------------------------------- the Settings → General on/off switch */
+
+reportUsage('session-fixture', usageFixture);
+assert.equal(render(true).children.length, 2, 'the sub-title is back for the switch tests');
+
+const prefRow = renderPref();
+assert.equal(prefRow.props.className, 'dshQuota_pref');
+const checkbox = findByType(prefRow, 'input');
+assert.ok(checkbox, 'the row draws its own control');
+assert.equal(checkbox.props.type, 'checkbox');
+assert.equal(checkbox.props.checked, true, 'the switch starts on');
+assert.deepEqual(
+	leafTexts(prefRow),
+	['额度用量副标题', '在额度下方显示当前会话用量的估算金额'],
+	'the seat projects no label, so the row carries its own copy'
+);
+
+const setShowUsage = (checked) => findByType(renderPref(), 'input').props.onChange({ target: { checked } });
+
+setShowUsage(false);
+assert.equal(render(true).children.length, 1, 'turning the switch off removes the sub-title');
+assert.equal(findByType(renderPref(), 'input').props.checked, false, 'and the switch reflects it');
+assert.equal(storage.get('dsh-quota-usage:show-usage'), '0', 'the choice is remembered');
+assert.doesNotMatch(render(true).props.title, /本会话用量/, 'a hidden sub-title is left out of the tooltip as well');
+
+setShowUsage(true);
+assert.equal(render(true).children.length, 2, 'turning it back on restores the sub-title');
+assert.equal(storage.get('dsh-quota-usage:show-usage'), '1', 'and that choice is remembered too');
+assert.match(render(true).props.title, /本会话用量/, 'the tooltip follows the switch back');
+
+// The credit row's own click still refreshes; the switch must not become a
+// second refresh path, so it is a separate seat entirely.
+assert.equal(typeof render(true).props.onClick, 'function');
 
 /* ------------------------------------------- a failed mount stays inert + traceable */
 

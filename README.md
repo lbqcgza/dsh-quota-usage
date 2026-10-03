@@ -52,7 +52,21 @@ plugin_manager install_bundle  target = <本仓库绝对路径>
 
 ## 显示效果
 
-展开侧边栏时占一行，位置在 `sidebar.settings`（设置 + 账号 launcher）**上方**。
+展开侧边栏时占两行，位置在 `sidebar.settings`（设置 + 账号 launcher）**上方**：
+
+```text
+  额度                        ¥13.34（赠¥1.00）   ← 本组件（用户名上方）
+  约 ¥1.20–2.40                                  ← 用量副标题
+  ⚙ 设置
+  (头像) 张三                                     ← 账号 launcher / 用户名
+```
+
+点击触发一次手动刷新时，金额向左让位，转圈出现在它的右侧：
+
+```text
+  额度               ¥13.34（赠¥1.00） ◌
+  约 ¥1.20–2.40
+```
 
 | 阶段 | 显示 | 含义 |
 | --- | --- | --- |
@@ -62,10 +76,10 @@ plugin_manager install_bundle  target = <本仓库绝对路径>
 | `unavailable` | 未连接 | 页面还没有 `remote.account` 服务，正在快速重试 |
 | `signed-out` | 未登录 | 宿主侧没有可用凭证 |
 
-悬停提示给出拆分与刷新节奏：
+悬停提示给出拆分、用量与刷新节奏：
 
 ```text
-总余额 ¥13.34 · 充值余额 ¥12.34 · 赠金余额 ¥1.00 · 更新于 14:32 · 每 60 秒自动刷新 · 点击立即刷新
+总余额 ¥13.34 · 充值余额 ¥12.34 · 赠金余额 ¥1.00 · 更新于 14:32 · 每 60 秒自动刷新 · 本会话用量 1.28M tokens · 估算 ¥1.20–2.40 · token 取自会话日志；金额按官方价目表推算，不是账单金额（…） · 点击立即刷新
 ```
 
 收起成 56px 轨道时（macOS / 普通 Web）变成 36px 圆形按钮，数字居中、转圈变成包住它的外圈；
@@ -74,21 +88,32 @@ Windows 原生标题栏下侧边栏收起时整个底部区域由 shell 隐藏�
 
 ## 用量副标题
 
-额度下方那一行来自**当前会话**的 token 用量，分两部分：
+额度下方那一行是**当前会话**的用量估算：
 
 ```text
-本会话 1.28M tokens · 约 ¥1.20–2.40
+约 ¥1.20–2.40
 ```
 
-- **token 数是真实的** —— 取自 `tokenUsage` 投影（整份持久日志的回放结果，所以分页与压缩不会改变它）。口径与 DSH 自己一致：提示侧三个互斥桶 `uncachedInputTokens` + `cacheReadTokens` + `cacheWriteTokens`，加上 `outputTokens`
+副标题与上方的「额度」标签**左对齐**（`<button>` 的 UA 样式默认 `text-align:center`，会把撑满宽度的这一行居中，
+所以插件显式设了 `text-align:left`）。
+
 - **金额是估算** —— 会话日志里**只有 token、没有任何金额字段**（DSH 也不随包发布价格表），所以这一项由官方价目表推算：`deepseek-flash` 空闲时段 输入命中 0.02 / 输入未命中 1 / 输出 4（元每百万 tokens），高峰时段翻倍
+- **token 数在悬停提示里** —— 它来自 `tokenUsage` 投影（整份持久日志的回放结果，分页与压缩不会改变它），口径与 DSH 自己一致：提示侧三个互斥桶 `uncachedInputTokens` + `cacheReadTokens` + `cacheWriteTokens`，加上 `outputTokens`。悬停可见精确 token 数，副标题只显示钱
 
 两个估算固有的误差来源，都来自数据而不是算术：
 
 1. **只能给区间** —— 投影没有逐请求时间线，历史 token 无法还原当时是高峰还是空闲，于是两档都算出来显示成 `¥1.20–2.40`。高峰时段是北京时间周一至周五 9:00–12:00、14:00–18:00（不含法定节假日）
 2. **缓存写入按未命中计价** —— 官方价目表只有"缓存命中/未命中"两列，没有缓存写入列，所以 `cacheWriteTokens` 按未命中输入价计，与 DSH 自己的提示侧分组一致
 
-还有一条范围上的限制：这一行**只覆盖当前会话**。额度行所在的 `sidebar.footer.action` 是 root 作用域，
+### 开关
+
+**设置 → 通用 → 额度用量副标题** 可以关掉这一行。开关状态记在浏览器本地（`localStorage` 的
+`dsh-quota-usage:show-usage`，这是本插件唯一写入的键），关掉后副标题与悬停提示里的用量段一起消失。
+没打开任何会话时这一行本来就不渲染，组件仍是单行。
+
+### 范围限制
+
+这一行**只覆盖当前会话**。额度行所在的 `sidebar.footer.action` 是 root 作用域，
 而 `tokenUsage` 这类投影只能从会话作用域读到 —— 所以插件额外在会话作用域的
 `conversation.composer.dock` 挂了一个**不渲染任何东西**的桥接组件，把读数交给额度行。
 要做到"整个工作区"（含没打开过的会话）必须加 host 半侧去汇总会话日志，那会引入一个本地路由，
@@ -108,7 +133,7 @@ Windows 原生标题栏下侧边栏收起时整个底部区域由 shell 隐藏�
 - **不注册任何 HTTP 路由** —— host 半侧是空的 `apply`，只为让包在 Loader 里占一行
 - **不执行命令、不读文件**
 - **只发一次调用** —— `remote.account.getBalance`，与官方「设置 → 账号」页同源；随请求的元数据**只有** `version`（DSH 版本号）、`locale`（界面语言）、`timezoneOffsetSeconds`（UTC 偏移）三项，与官方账号页逐字一致，没有设备 ID / 用户 ID
-- **不写浏览器状态** —— `localStorage`、`sessionStorage`、cookie、`indexedDB` 全无使用
+- **不写浏览器状态** —— `localStorage`、`sessionStorage`、cookie、`indexedDB` 全无使用。**唯一的例外**是那一个显示偏好键 `dsh-quota-usage:show-usage`（用量副标题的开关状态），它不出浏览器、不参与任何请求
 - **没有任何遥测出口** —— 代码里没有 `fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon`
 
 需要报告安全问题请用 [私密漏洞报告](https://github.com/lbqcgza/dsh-quota-usage/security/advisories/new)，

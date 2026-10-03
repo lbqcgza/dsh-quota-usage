@@ -2,10 +2,10 @@
   <title>dsh-quota-usage —— 平时与手动刷新时</title>
   <style>
     .plate { fill: #f2f3f8; stroke: #e4e6ee; stroke-width: 1; }
-    .head { font: 500 15px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; fill: #111827; }
     .label { font: 400 15px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; fill: #6b7280; }
     .value { font: 600 17px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; fill: #111827; }
     .bonus { font: 400 13px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; fill: #111827; }
+    .sub { font: 400 11px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; fill: #8b93a1; }
     .muted { font: 400 15px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; fill: #9aa1ad; }
     .caption { font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; fill: #9aa1ad; }
     .step { font: 500 13px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; fill: #6b7280; }
@@ -15,31 +15,33 @@
     .arc { fill: none; stroke: #6b7280; stroke-width: 2; stroke-linecap: round; }
   </style>
 
-  <text class="step" x="24" y="34">① 平时：金额贴住最右边，不为转圈留空位</text>
+  <text class="step" x="24" y="34">① 平时：金额贴住最右边；用量副标题与上方「额度」左对齐</text>
   <rect class="plate" x="24" y="46" width="672" height="170" rx="14"/>
 
-  <text class="label" x="64" y="100">额度</text>
-  <text class="value" x="592" y="100" text-anchor="end">¥13.34</text>
-  <text class="bonus" x="672" y="100" text-anchor="end">（赠¥1.00）</text>
+  <text class="label" x="64" y="86">额度</text>
+  <text class="value" x="592" y="86" text-anchor="end">¥13.34</text>
+  <text class="bonus" x="672" y="86" text-anchor="end">（赠¥1.00）</text>
+  <text class="sub" x="64" y="104">约 ¥1.20–2.40</text>
 
-  <circle class="icon" cx="72" cy="149" r="8"/>
-  <text class="muted" x="96" y="154">设置</text>
-  <circle class="avatar" cx="72" cy="193" r="10"/>
-  <text class="muted" x="96" y="198">张三</text>
+  <circle class="icon" cx="72" cy="145" r="8"/>
+  <text class="muted" x="96" y="150">设置</text>
+  <circle class="avatar" cx="72" cy="187" r="10"/>
+  <text class="muted" x="96" y="192">张三</text>
 
   <text class="step" x="24" y="238">② 手动刷新：转圈出现在余额右侧，金额向左让位 22px</text>
   <rect class="plate" x="24" y="250" width="672" height="170" rx="14"/>
 
-  <text class="label" x="64" y="304">额度</text>
-  <text class="value" x="570" y="304" text-anchor="end">¥13.34</text>
-  <text class="bonus" x="650" y="304" text-anchor="end">（赠¥1.00）</text>
-  <circle class="track" cx="665" cy="298" r="7"/>
-  <circle class="arc" cx="665" cy="298" r="7" stroke-dasharray="32.99 11.00" transform="rotate(-90 665 298)"/>
+  <text class="label" x="64" y="290">额度</text>
+  <text class="value" x="570" y="290" text-anchor="end">¥13.34</text>
+  <text class="bonus" x="650" y="290" text-anchor="end">（赠¥1.00）</text>
+  <text class="sub" x="64" y="308">约 ¥1.20–2.40</text>
+  <circle class="track" cx="665" cy="284" r="7"/>
+  <circle class="arc" cx="665" cy="284" r="7" stroke-dasharray="32.99 11.00" transform="rotate(-90 665 284)"/>
 
-  <circle class="icon" cx="72" cy="353" r="8"/>
-  <text class="muted" x="96" y="358">设置</text>
-  <circle class="avatar" cx="72" cy="397" r="10"/>
-  <text class="muted" x="96" y="402">张三</text>
+  <circle class="icon" cx="72" cy="349" r="8"/>
+  <text class="muted" x="96" y="354">设置</text>
+  <circle class="avatar" cx="72" cy="391" r="10"/>
+  <text class="muted" x="96" y="396">张三</text>
 
-  <text class="caption" x="360" y="442" text-anchor="middle">示意图：按真实尺寸与配色绘制，非截图</text>
+  <text class="caption" x="360" y="442" text-anchor="middle">示意图：按真实尺寸与配色绘制，非截图 · 用量行可在「设置 → 通用」开关</text>
 </svg>
