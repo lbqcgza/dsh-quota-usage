@@ -222,7 +222,7 @@ const pref = registered.find((entry) => entry.meta.name === 'settings.general.it
 assert.ok(pref, 'the usage switch has a row in Settings → General');
 assert.equal(pref.meta.id, 'dsh-quota-usage-usage');
 assert.equal(pref.meta.order, 31, 'it sits just after the composer performance-usage row');
-assert.equal(pref.meta.label(), '额度用量副标题');
+assert.equal(pref.meta.label(), '本会话用量显示');
 const renderPref = () => pref.component({ t, ...pref.meta.inject() });
 
 const t = ctx.locale.bind(mod.NS);
@@ -540,8 +540,18 @@ assert.equal(checkbox.props.type, 'checkbox');
 assert.equal(checkbox.props.checked, true, 'the switch starts on');
 assert.deepEqual(
 	leafTexts(prefRow),
-	['额度用量副标题', '在额度下方显示当前会话用量的估算金额'],
+	['本会话用量显示', '在额度下方显示当前会话的用量估算'],
 	'the seat projects no label, so the row carries its own copy'
+);
+assert.match(
+	sheet,
+	/\.dshQuota_pref\{[^}]*border-bottom:\.5px solid var\(--dsw-alias-border-l2\)/,
+	'the row carries the divider every shipped General row has, or it will not read as one'
+);
+assert.match(
+	sheet,
+	/\.dshQuota_pref\{[^}]*padding:16px 0/,
+	'and the 16px vertical padding the shipped rows use'
 );
 
 const setShowUsage = (checked) => findByType(renderPref(), 'input').props.onChange({ target: { checked } });
